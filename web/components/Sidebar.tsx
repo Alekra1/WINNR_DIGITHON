@@ -16,7 +16,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/",     label: "Dashboard",    icon: "dashboard" },
   { href: "/chat", label: "Knowledge Vault", icon: "psychology" },
   { href: "#",     label: "Insights",     icon: "analytics",     disabled: true },
-  { href: "/tasks", label: "Task Tracker", icon: "task_alt" },
   { href: "/recordings", label: "Recordings", icon: "video_library" },
 ];
 

@@ -122,13 +122,6 @@ export interface RecalledMemory {
   score?: number;
 }
 
-/** A task surfaced in the global Task Tracker, tagged with its source. meetingId null = manual task. */
-export type TrackerTask = Task & {
-  meetingId: string | null;
-  meetingTitle: string | null;
-  meetingType?: MeetingType;
-};
-
 /** Lightweight meeting card for the Recordings library (no transcript shipped to client). */
 export interface RecordingCard {
   id: string;
