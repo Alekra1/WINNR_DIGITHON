@@ -83,12 +83,13 @@ export async function generateTasks(
 Known participants: ${speakerList}
 
 Return ONLY valid JSON in this exact shape:
-{ "tasks": [ { "assignee": string, "text": string, "dueDate": string } ] }
+{ "tasks": [ { "assignee": string, "text": string, "dueDate": string, "priority": "high" | "medium" | "low" } ] }
 
 Rules:
 - "assignee" must be one of the known participants when clearly attributable, otherwise "Unassigned".
 - "text" is a short, imperative description of the action (e.g. "Send the proposal to the client").
 - "dueDate" is an ISO date string (YYYY-MM-DD) only if explicitly mentioned; omit the field otherwise.
+- "priority" reflects urgency — "high" for explicit deadlines/blockers/critical items, "low" for nice-to-haves, otherwise "medium". Always set it.
 - If there are no action items, return { "tasks": [] }.
 - Do not include any text outside the JSON object.`;
 
@@ -119,7 +120,7 @@ Rules:
 
     return items
       .filter(
-        (item): item is { assignee: string; text: string; dueDate?: string } =>
+        (item): item is { assignee: string; text: string; dueDate?: string; priority?: string } =>
           typeof item === "object" &&
           item !== null &&
           typeof (item as Record<string, unknown>).text === "string"
@@ -135,6 +136,9 @@ Rules:
         ...(typeof item.dueDate === "string" && item.dueDate
           ? { dueDate: item.dueDate }
           : {}),
+        priority: (item.priority === "high" || item.priority === "medium" || item.priority === "low")
+          ? item.priority
+          : "medium" as const,
       }));
   } catch (err) {
     if (err instanceof Error) throw err;

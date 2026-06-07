@@ -44,6 +44,7 @@ export interface Task {
   text: string;
   done: boolean;
   dueDate?: string; // ISO date, optional
+  priority?: "high" | "medium" | "low";
 }
 
 /** Per-employee snapshot for one meeting. */
@@ -120,3 +121,10 @@ export interface RecalledMemory {
   concept?: string;
   score?: number;
 }
+
+/** A task surfaced in the global Task Tracker, tagged with its source. meetingId null = manual task. */
+export type TrackerTask = Task & {
+  meetingId: string | null;
+  meetingTitle: string | null;
+  meetingType?: MeetingType;
+};
