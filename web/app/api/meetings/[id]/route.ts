@@ -66,7 +66,7 @@ export async function PATCH(
     // Renamed speakers create fresh snapshot memories (old name left as-is).
     const report = await syncMemories(updated);
     console.log(
-      `[muninn] patch ${id}: ${report.created} created, ${report.updated} updated, ${report.failed} failed`,
+      `[muninn] patch ${id}: ${report.created} created, ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
     );
 
     return NextResponse.json(updated);

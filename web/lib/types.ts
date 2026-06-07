@@ -65,6 +65,12 @@ export interface MuninnRefs {
   summaryId: string;
   snapshotIds: Record<string, string>; // employeeName -> engram id
   taskIds: Record<string, string>; // task.id -> engram id
+  /**
+   * Content fingerprints keyed by logical id ("summary" | `snapshot:<name>` |
+   * `task:<id>`). Lets re-sync skip `evolve` when content is unchanged, which
+   * avoids needless version churn and keeps `is_part_of` edges intact.
+   */
+  hashes?: Record<string, string>;
 }
 
 /** The full structured meeting object — UI source of truth, persisted via store.ts. */

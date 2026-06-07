@@ -2,6 +2,7 @@
 // store + Muninn memory. Used by /api/ingest (full run) and /api/meetings/[id]
 // (speaker-rename recompute).
 
+import { createHash } from "crypto";
 import { transcribeAudio, deleteTranscript } from "@/lib/assembly";
 import { computeParticipation } from "@/lib/metrics";
 import { resolveName } from "@/lib/metrics";
@@ -127,8 +128,14 @@ function taskMemory(m: Meeting, t: Task, summaryId?: string): MemoryInput {
 export interface MemorySyncReport {
   created: number;
   updated: number;
+  unchanged: number;
   failed: number;
   errors: string[];
+}
+
+/** Short content fingerprint, used to skip no-op evolves on re-sync. */
+function fingerprint(content: string): string {
+  return createHash("sha1").update(content).digest("hex").slice(0, 16);
 }
 
 /**
@@ -145,14 +152,22 @@ export interface MemorySyncReport {
  * Fail-soft per item, logged, counted. Whatever ids succeed are persisted.
  */
 export async function syncMemories(m: Meeting): Promise<MemorySyncReport> {
-  const report: MemorySyncReport = { created: 0, updated: 0, failed: 0, errors: [] };
+  const report: MemorySyncReport = {
+    created: 0,
+    updated: 0,
+    unchanged: 0,
+    failed: 0,
+    errors: [],
+  };
   const refs: MuninnRefs = m.muninnRefs
     ? {
         summaryId: m.muninnRefs.summaryId,
         snapshotIds: { ...m.muninnRefs.snapshotIds },
         taskIds: { ...m.muninnRefs.taskIds },
+        hashes: { ...(m.muninnRefs.hashes ?? {}) },
       }
-    : { summaryId: "", snapshotIds: {}, taskIds: {} };
+    : { summaryId: "", snapshotIds: {}, taskIds: {}, hashes: {} };
+  const hashes = refs.hashes!; // initialized above
   let changed = false;
 
   const fail = (label: string, e: unknown) => {
@@ -162,19 +177,36 @@ export async function syncMemories(m: Meeting): Promise<MemorySyncReport> {
     console.error("[muninn sync]", msg);
   };
 
-  // 1. Summary (root) — evolve if known, else create.
+  /** Evolve a known memory only if its content changed; returns the current id. */
+  const syncExisting = async (
+    label: string,
+    id: string,
+    input: MemoryInput
+  ): Promise<string> => {
+    const fp = fingerprint(input.content);
+    if (hashes[label] === fp) {
+      report.unchanged++;
+      return id;
+    }
+    const newId = await evolveMemory(id, input.content, "re-synced from meeting edit");
+    hashes[label] = fp;
+    report.updated++;
+    changed = true;
+    return newId;
+  };
+
+  // 1. Summary (root) — evolve-if-changed when known, else create.
   const summary = summaryMemory(m);
   if (refs.summaryId) {
     try {
-      refs.summaryId = await evolveMemory(refs.summaryId, summary.content, "meeting re-synced");
-      report.updated++;
-      changed = true;
+      refs.summaryId = await syncExisting("summary", refs.summaryId, summary);
     } catch (e) {
       fail("summary", e);
     }
   } else {
     try {
       refs.summaryId = await rememberMemory(summary);
+      hashes["summary"] = fingerprint(summary.content);
       report.created++;
       changed = true;
     } catch (e) {
@@ -183,39 +215,37 @@ export async function syncMemories(m: Meeting): Promise<MemorySyncReport> {
   }
   const summaryId = refs.summaryId || undefined;
 
-  // 2. Snapshots + tasks — evolve existing in place; collect new for one batch.
-  type Pending = { kind: "snapshot" | "task"; key: string; input: MemoryInput };
+  // 2. Snapshots + tasks — evolve-if-changed existing; collect new for one batch.
+  type Pending = { kind: "snapshot" | "task"; key: string; label: string; input: MemoryInput };
   const pending: Pending[] = [];
 
   for (const s of m.snapshots) {
     const input = snapshotMemory(m, s, summaryId);
+    const label = `snapshot:${s.employeeName}`;
     const existing = refs.snapshotIds[s.employeeName];
     if (existing) {
       try {
-        refs.snapshotIds[s.employeeName] = await evolveMemory(existing, input.content, "snapshot re-synced");
-        report.updated++;
-        changed = true;
+        refs.snapshotIds[s.employeeName] = await syncExisting(label, existing, input);
       } catch (e) {
-        fail(`snapshot:${s.employeeName}`, e);
+        fail(label, e);
       }
     } else {
-      pending.push({ kind: "snapshot", key: s.employeeName, input });
+      pending.push({ kind: "snapshot", key: s.employeeName, label, input });
     }
   }
 
   for (const t of m.tasks) {
     const input = taskMemory(m, t, summaryId);
+    const label = `task:${t.id}`;
     const existing = refs.taskIds[t.id];
     if (existing) {
       try {
-        refs.taskIds[t.id] = await evolveMemory(existing, input.content, "task re-synced");
-        report.updated++;
-        changed = true;
+        refs.taskIds[t.id] = await syncExisting(label, existing, input);
       } catch (e) {
-        fail(`task:${t.id}`, e);
+        fail(label, e);
       }
     } else {
-      pending.push({ kind: "task", key: t.id, input });
+      pending.push({ kind: "task", key: t.id, label, input });
     }
   }
 
@@ -227,14 +257,15 @@ export async function syncMemories(m: Meeting): Promise<MemorySyncReport> {
         if (id) {
           if (p.kind === "snapshot") refs.snapshotIds[p.key] = id;
           else refs.taskIds[p.key] = id;
+          hashes[p.label] = fingerprint(p.input.content);
           report.created++;
           changed = true;
         } else {
-          fail(`${p.kind}:${p.key}`, new Error("batch returned no id"));
+          fail(p.label, new Error("batch returned no id"));
         }
       });
     } catch (e) {
-      for (const p of pending) fail(`${p.kind}:${p.key}`, e);
+      for (const p of pending) fail(p.label, e);
     }
   }
 
@@ -306,7 +337,7 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
     if (updated) {
       const report = await syncMemories(updated);
       console.log(
-        `[muninn] meeting ${id}: ${report.created} created, ${report.updated} updated, ${report.failed} failed`,
+        `[muninn] meeting ${id}: ${report.created} created, ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
       );
     }
   } catch (e) {

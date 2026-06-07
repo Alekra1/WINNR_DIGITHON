@@ -85,6 +85,12 @@ Replace `writeMemories` with **`syncMemories(meeting)`**:
 - Recall: fail-soft → `[]`.
 - Transcript over budget → summary fallback + note.
 
+## Hardening (MVP)
+- **Content-fingerprint guard.** `MuninnRefs.hashes` stores a sha1 fingerprint per memory.
+  Re-sync skips `evolve` when content is unchanged (report counts it `unchanged`), so a plain
+  reindex causes zero version churn and leaves `is_part_of` edges intact. `evolve` (and its edge
+  staleness) only happens on a genuine content change.
+
 ## Verification
 1. Upload a meeting → vault has 1 summary + N snapshots + M tasks, snapshots/tasks `is_part_of`
    the summary; `meeting.muninnRefs` populated.
