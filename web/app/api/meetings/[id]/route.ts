@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getMeeting, updateMeeting } from "@/lib/store";
+import { getMeeting, updateMeeting, deleteMeeting } from "@/lib/store";
 import { computeParticipation } from "@/lib/metrics";
 import { buildSnapshots } from "@/lib/pipeline";
-import type { Meeting, SpeakerMap, Task } from "@/lib/types";
+import { forgetMemory, forgetMemoriesByEntity } from "@/lib/muninn";
+import type { Meeting, MeetingType, SpeakerMap, Task } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -32,9 +33,21 @@ export async function PATCH(
     const body = (await req.json()) as {
       speakerMap?: SpeakerMap;
       tasks?: Task[];
+      archived?: boolean;
+      title?: string;
+      type?: MeetingType;
+      project?: string;
+      department?: string;
     };
 
     const patch: Partial<Meeting> = {};
+
+    // Metadata edits — do not touch metrics.
+    if (typeof body.archived === "boolean") patch.archived = body.archived;
+    if (typeof body.title === "string") patch.title = body.title.trim();
+    if (typeof body.type === "string") patch.type = body.type;
+    if (typeof body.project === "string") patch.project = body.project.trim();
+    if (typeof body.department === "string") patch.department = body.department.trim();
 
     // Renaming speakers: recompute participation labels + snapshots.
     if (body.speakerMap) {
@@ -64,6 +77,42 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (e) {
     console.error("[PATCH /api/meetings/[id]]", e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Permanently delete a meeting and forget its Muninn memories.
+ * Memory forget is fail-soft — record deletion proceeds regardless.
+ */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const existing = await getMeeting(id);
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // Forget memories: prefer stored ids, fall back to entity (title) lookup.
+    if (existing.memoryIds && existing.memoryIds.length > 0) {
+      await Promise.all(existing.memoryIds.map((mid) => forgetMemory(mid)));
+    } else {
+      await forgetMemoriesByEntity(existing.title);
+    }
+
+    const removed = await deleteMeeting(id);
+    if (!removed) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[DELETE /api/meetings/[id]]", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Internal server error" },
       { status: 500 }

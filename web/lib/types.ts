@@ -74,6 +74,8 @@ export interface Meeting {
   snapshots: EmployeeSnapshot[];
   status: "processing" | "ready" | "error";
   error?: string;
+  archived?: boolean; // soft-delete: hidden from default list, recoverable
+  memoryIds?: string[]; // Muninn memory ids written for this meeting (for forget-on-delete)
 }
 
 export interface ChatMessage {

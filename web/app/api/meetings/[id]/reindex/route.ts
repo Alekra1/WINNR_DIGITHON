@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMeeting } from "@/lib/store";
+import { getMeeting, updateMeeting } from "@/lib/store";
 import { writeMemories } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
@@ -15,5 +15,8 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const report = await writeMemories(meeting);
+  if (report.ids.length > 0) {
+    await updateMeeting(id, { memoryIds: report.ids });
+  }
   return NextResponse.json(report);
 }

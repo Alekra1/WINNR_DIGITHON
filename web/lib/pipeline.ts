@@ -52,6 +52,7 @@ export interface MemoryWriteReport {
   written: number;
   failed: number;
   errors: string[];
+  ids: string[]; // created memory ids (for forget-on-delete)
 }
 
 /**
@@ -105,10 +106,11 @@ export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
     }),
   ];
 
-  const report: MemoryWriteReport = { written: 0, failed: 0, errors: [] };
+  const report: MemoryWriteReport = { written: 0, failed: 0, errors: [], ids: [] };
   for (const job of jobs) {
     try {
-      await rememberMemory(job.args);
+      const id = await rememberMemory(job.args);
+      if (id) report.ids.push(id);
       report.written++;
     } catch (e) {
       report.failed++;
@@ -175,6 +177,10 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
 
     if (updated) {
       const report = await writeMemories(updated);
+      // Persist the written memory ids so a later hard-delete can forget them.
+      if (report.ids.length > 0) {
+        await updateMeeting(id, { memoryIds: report.ids });
+      }
       console.log(
         `[muninn] meeting ${id}: ${report.written} written, ${report.failed} failed`,
       );

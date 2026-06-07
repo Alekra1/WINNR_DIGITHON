@@ -175,23 +175,90 @@ async function callMuninnTool(
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Pull a memory id (ULID) out of muninn_remember's text payload. Returns null if absent. */
+function parseMemoryId(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  // Sometimes the payload is the bare ULID.
+  if (/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(trimmed)) return trimmed;
+  // Otherwise it's a JSON object — look for common id fields.
+  try {
+    const obj = JSON.parse(trimmed) as Record<string, unknown>;
+    for (const key of ["id", "memory_id", "engram_id", "memoryId"]) {
+      if (typeof obj[key] === "string") return obj[key] as string;
+    }
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
 /**
- * Store a memory in Muninn.
- * Throws on hard failure so callers (e.g. ingest) can log it.
+ * Store a memory in Muninn. Returns the created memory id (or null if the id
+ * could not be parsed — non-fatal). Throws on hard RPC failure so callers
+ * (e.g. ingest) can log it.
  */
 export async function rememberMemory(args: {
   content: string;
   type?: string;
   summary?: string;
   entities?: { name: string; type: string }[];
-}): Promise<void> {
+}): Promise<string | null> {
   const toolArgs: Record<string, unknown> = { vault: VAULT, content: args.content };
   if (args.type !== undefined) toolArgs.type = args.type;
   if (args.summary !== undefined) toolArgs.summary = args.summary;
   if (args.entities !== undefined) toolArgs.entities = args.entities;
 
-  // We don't need the return value — just ensure no RPC-level error.
-  await callMuninnTool("muninn_remember", toolArgs);
+  const text = await callMuninnTool("muninn_remember", toolArgs);
+  return parseMemoryId(text);
+}
+
+/** Forget (soft-delete, excluded from recall) a single memory by id. Fail-soft. */
+export async function forgetMemory(id: string): Promise<void> {
+  try {
+    await callMuninnTool("muninn_forget", { vault: VAULT, id });
+  } catch (e) {
+    console.error(`[muninn forget failed] ${id}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Fallback for meetings with no stored memory ids: find every memory mentioning
+ * an entity (e.g. the meeting title) and forget each. Fail-soft.
+ */
+export async function forgetMemoriesByEntity(entityName: string): Promise<void> {
+  try {
+    const text = await callMuninnTool("muninn_find_by_entity", {
+      vault: VAULT,
+      entity_name: entityName,
+      limit: 50,
+    });
+    if (!text) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return;
+    }
+    const items: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object"
+      ? ((parsed as Record<string, unknown>).memories as unknown[]) ??
+        ((parsed as Record<string, unknown>).results as unknown[]) ??
+        []
+      : [];
+    const ids = items
+      .map((it) =>
+        it && typeof it === "object" ? (it as Record<string, unknown>).id : undefined,
+      )
+      .filter((v): v is string => typeof v === "string");
+    for (const id of ids) await forgetMemory(id);
+  } catch (e) {
+    console.error(
+      `[muninn forget-by-entity failed] ${entityName}:`,
+      e instanceof Error ? e.message : e,
+    );
+  }
 }
 
 /**

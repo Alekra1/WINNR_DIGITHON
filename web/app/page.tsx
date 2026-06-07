@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Meeting, MeetingType } from "@/lib/types";
-import { StatusBadge, TypeBadge } from "@/components/Badge";
+import MeetingCard from "@/components/MeetingCard";
 import { ACCEPT_ATTR, ACCEPT_HINT, validateUploadFile } from "@/lib/constants";
-import { formatDate, formatDuration } from "@/lib/utils";
 
 const MEETING_TYPES: MeetingType[] = [
   "standup",
@@ -26,17 +24,17 @@ const TYPE_LABELS: Record<MeetingType, string> = {
   other:      "Other",
 };
 
-function topTalker(meeting: Meeting): string | null {
-  if (!meeting.participation || meeting.participation.length === 0) return null;
-  const top = [...meeting.participation].sort((a, b) => b.talkPct - a.talkPct)[0];
-  return `${top.employeeName} (${Math.round(top.talkPct)}%)`;
-}
-
 export default function MeetingsDashboard() {
   const router = useRouter();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // List view + per-meeting CRUD state
+  const [showArchived, setShowArchived] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Meeting | null>(null);
+  const [deleting, setDeleting] = useState<Meeting | null>(null);
 
   // Upload form state
   const [title, setTitle] = useState("");
@@ -48,14 +46,14 @@ export default function MeetingsDashboard() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchMeetings();
-  }, []);
+    fetchMeetings(showArchived);
+  }, [showArchived]);
 
-  async function fetchMeetings() {
+  async function fetchMeetings(archived: boolean) {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch("/api/meetings");
+      const res = await fetch(`/api/meetings${archived ? "?archived=1" : ""}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: Meeting[] = await res.json();
       setMeetings(data);
@@ -63,6 +61,43 @@ export default function MeetingsDashboard() {
       setFetchError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function patchMeeting(id: string, body: Record<string, unknown>) {
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error ?? `HTTP ${res.status}`);
+      }
+      await fetchMeetings(showArchived);
+    } catch (err) {
+      setFetchError((err as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmDelete(m: Meeting) {
+    setBusyId(m.id);
+    try {
+      const res = await fetch(`/api/meetings/${m.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e?.error ?? `HTTP ${res.status}`);
+      }
+      setDeleting(null);
+      await fetchMeetings(showArchived);
+    } catch (err) {
+      setFetchError((err as Error).message);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -277,9 +312,14 @@ export default function MeetingsDashboard() {
       {/* ── Meeting list ── */}
       <section>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
-            All meetings
-          </h2>
+          <div className="flex items-center gap-1">
+            <TabButton active={!showArchived} onClick={() => setShowArchived(false)}>
+              All meetings
+            </TabButton>
+            <TabButton active={showArchived} onClick={() => setShowArchived(true)}>
+              Archived
+            </TabButton>
+          </div>
           {meetings.length > 0 && (
             <span className="badge" style={{ background: "var(--bg-surface-high)", color: "var(--text-2)" }}>
               {meetings.length}
@@ -309,7 +349,7 @@ export default function MeetingsDashboard() {
               cloud_off
             </span>
             <p className="text-sm">Failed to load meetings: {fetchError}</p>
-            <button onClick={fetchMeetings} className="btn-ghost mt-4 text-xs">
+            <button onClick={() => fetchMeetings(showArchived)} className="btn-ghost mt-4 text-xs">
               <span className="material-symbols-outlined" style={{ fontSize: 15 }}>refresh</span>
               Retry
             </button>
@@ -320,67 +360,208 @@ export default function MeetingsDashboard() {
               className="material-symbols-outlined"
               style={{ fontSize: 44, color: "var(--text-3)", display: "block", marginBottom: 12 }}
             >
-              calendar_today
+              {showArchived ? "inventory_2" : "calendar_today"}
             </span>
             <p className="text-sm font-medium" style={{ color: "var(--text-2)" }}>
-              No meetings yet — upload one above.
+              {showArchived
+                ? "No archived meetings."
+                : "No meetings yet — upload one above."}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {meetings.map((m) => {
-              const leader = topTalker(m);
-              return (
-                <Link
-                  key={m.id}
-                  href={`/meetings/${m.id}`}
-                  className="card card-hover p-5 flex flex-col gap-3 group"
-                >
-                  {/* Top row */}
-                  <div className="flex items-start justify-between gap-2">
-                    <h3
-                      className="text-sm font-semibold leading-snug line-clamp-2 transition-colors duration-200 group-hover:text-[var(--accent)]"
-                      style={{ color: "var(--text-1)" }}
-                    >
-                      {m.title}
-                    </h3>
-                    <StatusBadge status={m.status} />
-                  </div>
-
-                  {/* Meta row */}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <TypeBadge type={m.type} />
-                    <span className="text-xs" style={{ color: "var(--text-3)" }}>
-                      {formatDate(m.createdAt)}
-                    </span>
-                    {m.durationSec > 0 && (
-                      <span className="text-xs" style={{ color: "var(--text-3)" }}>
-                        · {formatDuration(m.durationSec)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Top talker */}
-                  {leader && (
-                    <div
-                      className="flex items-center gap-1.5 text-xs mt-auto pt-2"
-                      style={{
-                        color:     "var(--text-2)",
-                        borderTop: "1px solid var(--border)",
-                      }}
-                    >
-                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>
-                        person
-                      </span>
-                      {leader}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
+            {meetings.map((m) => (
+              <MeetingCard
+                key={m.id}
+                meeting={m}
+                archivedView={showArchived}
+                busy={busyId === m.id}
+                onEdit={setEditing}
+                onArchive={(meeting, archived) => patchMeeting(meeting.id, { archived })}
+                onDelete={setDeleting}
+              />
+            ))}
           </div>
         )}
       </section>
+
+      {/* ── Edit metadata modal ── */}
+      {editing && (
+        <EditMeetingModal
+          meeting={editing}
+          busy={busyId === editing.id}
+          onClose={() => setEditing(null)}
+          onSave={async (fields) => {
+            await patchMeeting(editing.id, fields);
+            setEditing(null);
+          }}
+        />
+      )}
+
+      {/* ── Delete confirm modal ── */}
+      {deleting && (
+        <ConfirmDeleteModal
+          meeting={deleting}
+          busy={busyId === deleting.id}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => confirmDelete(deleting)}
+        />
+      )}
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-base font-semibold px-1 pb-1 transition-colors"
+      style={{
+        color: active ? "var(--text-1)" : "var(--text-3)",
+        borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ModalShell({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.55)" }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card p-6 w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EditMeetingModal({
+  meeting,
+  busy,
+  onClose,
+  onSave,
+}: {
+  meeting: Meeting;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (fields: {
+    title: string;
+    type: MeetingType;
+    project: string;
+    department: string;
+  }) => void;
+}) {
+  const [title, setTitle] = useState(meeting.title);
+  const [type, setType] = useState<MeetingType>(meeting.type);
+  const [project, setProject] = useState(meeting.project ?? "");
+  const [department, setDepartment] = useState(meeting.department ?? "");
+
+  return (
+    <ModalShell onClose={onClose}>
+      <h2 className="text-base font-semibold mb-4" style={{ color: "var(--text-1)" }}>
+        Edit meeting details
+      </h2>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!title.trim()) return;
+          onSave({ title: title.trim(), type, project, department });
+        }}
+      >
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>Title</label>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>Type</label>
+          <select className="input" value={type} onChange={(e) => setType(e.target.value as MeetingType)}>
+            {MEETING_TYPES.map((t) => (
+              <option key={t} value={t}>{TYPE_LABELS[t]}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>Project</label>
+            <input className="input" value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>Department</label>
+            <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="btn-primary" disabled={busy || !title.trim()}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ConfirmDeleteModal({
+  meeting,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  meeting: Meeting;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell onClose={onCancel}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="material-symbols-outlined" style={{ color: "var(--red)", fontSize: 22 }}>
+          warning
+        </span>
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
+          Delete meeting?
+        </h2>
+      </div>
+      <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--text-2)" }}>
+        Permanently delete <strong style={{ color: "var(--text-1)" }}>{meeting.title}</strong> and
+        remove it from the Knowledge Vault memory. This can&apos;t be undone.
+      </p>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="btn-primary"
+          style={{ background: "var(--red)", borderColor: "var(--red)" }}
+        >
+          {busy ? "Deleting…" : "Delete"}
+        </button>
+      </div>
+    </ModalShell>
   );
 }

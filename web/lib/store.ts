@@ -26,10 +26,22 @@ async function writeAll(meetings: Meeting[]): Promise<void> {
   await fs.writeFile(DATA_FILE, JSON.stringify(meetings, null, 2), "utf-8");
 }
 
-/** Return all meetings, newest first by createdAt. */
-export async function listMeetings(): Promise<Meeting[]> {
+/**
+ * Return meetings, newest first by createdAt.
+ * Excludes archived meetings unless `includeArchived` is set; pass
+ * `onlyArchived` to return just the archived ones (restore view).
+ */
+export async function listMeetings(opts?: {
+  includeArchived?: boolean;
+  onlyArchived?: boolean;
+}): Promise<Meeting[]> {
   const all = await readAll();
-  return all.slice().sort(
+  const filtered = all.filter((m) => {
+    if (opts?.onlyArchived) return m.archived === true;
+    if (opts?.includeArchived) return true;
+    return m.archived !== true;
+  });
+  return filtered.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 }
@@ -130,6 +142,22 @@ export function recoverInterruptedMeetings(
     );
     if (recovered > 0) await writeAll(meetings);
     return recovered;
+  });
+  chain = result.catch(() => undefined);
+  return result;
+}
+
+/**
+ * Permanently remove a meeting by id. Serialized via mutex.
+ * Returns true if a record was removed, false if no such meeting existed.
+ */
+export function deleteMeeting(id: string): Promise<boolean> {
+  const result = chain.then(async () => {
+    const all = await readAll();
+    const next = all.filter((m) => m.id !== id);
+    if (next.length === all.length) return false;
+    await writeAll(next);
+    return true;
   });
   chain = result.catch(() => undefined);
   return result;
