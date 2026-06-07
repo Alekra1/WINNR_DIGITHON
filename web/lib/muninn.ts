@@ -249,8 +249,8 @@ export async function recallMemories(
             if (item && typeof item === "object") {
               const m = item as Record<string, unknown>;
               const snippet =
-                (typeof m.summary === "string" && m.summary) ||
                 (typeof m.content === "string" && m.content) ||
+                (typeof m.summary === "string" && m.summary) ||
                 Object.values(m).find((v) => typeof v === "string") as string | undefined;
               return snippet ? [snippet] : [];
             }
