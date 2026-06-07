@@ -95,6 +95,7 @@ export interface Meeting {
   archived?: boolean; // soft-delete: hidden from default list, recoverable
   memoryIds?: string[]; // flat list of current Muninn ids (for forget-on-delete)
   muninnRefs?: MuninnRefs; // structured ids + fingerprints for idempotent re-sync
+  excludedSpeakers?: string[]; // diarization labels marked as bot / non-participant — dropped from metrics
 }
 
 export interface ChatMessage {

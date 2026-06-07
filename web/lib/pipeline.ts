@@ -317,7 +317,11 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
       ...identifiedSpeakerMap,
       ...(meeting.speakerMap ?? {}),
     };
-    const participation = computeParticipation(utterances, speakerMap);
+    const participation = computeParticipation(
+      utterances,
+      speakerMap,
+      meeting.excludedSpeakers,
+    );
     const speakerNames = participation.map((p) => p.employeeName);
     const speakerTranscript = formatSpeakerTranscript(utterances, speakerMap);
 

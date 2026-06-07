@@ -48,22 +48,17 @@ export default function MeetingCard({
         className="card card-hover p-5 flex flex-col gap-3 group"
         style={busy ? { opacity: 0.5, pointerEvents: "none" } : undefined}
       >
-        {/* Top row */}
-        <div className="flex items-start justify-between gap-2">
-          <h3
-            className="text-sm font-semibold leading-snug line-clamp-2 transition-colors duration-200 group-hover:text-[var(--accent)]"
-            style={{ color: "var(--text-1)" }}
-          >
-            {m.title}
-          </h3>
-          {/* spacer for the menu button which is absolutely positioned */}
-          <div className="shrink-0" style={{ width: 44, height: 20 }}>
-            <StatusBadge status={m.status} />
-          </div>
-        </div>
+        {/* Title — pr-9 leaves room for the menu button in the top-right corner */}
+        <h3
+          className="text-sm font-semibold leading-snug line-clamp-2 pr-9 transition-colors duration-200 group-hover:text-[var(--accent)]"
+          style={{ color: "var(--text-1)" }}
+        >
+          {m.title}
+        </h3>
 
         {/* Meta row */}
         <div className="flex flex-wrap gap-2 items-center">
+          <StatusBadge status={m.status} />
           <TypeBadge type={m.type} />
           <span className="text-xs" style={{ color: "var(--text-3)" }}>
             {formatDate(m.createdAt)}
@@ -101,12 +96,13 @@ export default function MeetingCard({
           e.stopPropagation();
           setMenuOpen((v) => !v);
         }}
-        className="absolute top-3 right-3 flex items-center justify-center rounded-md transition-colors"
+        className="absolute top-3 right-3 flex items-center justify-center rounded-lg transition-colors hover:text-[var(--accent)]"
         style={{
-          width: 28,
-          height: 28,
-          color: "var(--text-3)",
-          background: menuOpen ? "var(--bg-surface-high)" : "transparent",
+          width: 30,
+          height: 30,
+          color: menuOpen ? "var(--accent)" : "var(--text-2)",
+          background: menuOpen ? "var(--accent-container)" : "var(--bg-surface)",
+          border: "1px solid var(--border)",
         }}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 18 }}>

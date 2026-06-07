@@ -47,16 +47,25 @@ export function resolveName(label: string, speakerMap: SpeakerMap): string {
 /**
  * Compute per-speaker participation metrics from a list of utterances.
  * Returns results sorted by talkTimeSec descending.
+ *
+ * Speakers in `excludeLabels` (marked as bots / non-participants) are dropped
+ * entirely, and any speaker with zero talk time is auto-dropped — both keep
+ * silent bots and phantom diarization labels out of the metrics. talkPct is
+ * renormalized over the remaining speakers.
  */
 export function computeParticipation(
   utterances: Utterance[],
-  speakerMap: SpeakerMap
+  speakerMap: SpeakerMap,
+  excludeLabels?: Iterable<string>
 ): Participation[] {
+  const excluded = new Set(excludeLabels ?? []);
+
   // Group utterances by speaker label, preserving first-seen order.
   const order: string[] = [];
   const groups = new Map<string, Utterance[]>();
 
   for (const u of utterances) {
+    if (excluded.has(u.speaker)) continue;
     if (!groups.has(u.speaker)) {
       groups.set(u.speaker, []);
       order.push(u.speaker);
@@ -71,10 +80,13 @@ export function computeParticipation(
     talkTimes.set(speaker, ms);
   }
 
-  const totalMs = [...talkTimes.values()].reduce((a, b) => a + b, 0);
+  // Auto-drop speakers who produced no actual speech time (silent participants).
+  const keptOrder = order.filter((speaker) => (talkTimes.get(speaker) ?? 0) > 0);
+
+  const totalMs = keptOrder.reduce((a, s) => a + (talkTimes.get(s) ?? 0), 0);
 
   // Build raw (unrounded) results first so we can apply largest-remainder to talkPct.
-  const rawResults = order.map((speaker) => {
+  const rawResults = keptOrder.map((speaker) => {
     const turns = groups.get(speaker)!;
     const speakerMs = talkTimes.get(speaker)!;
 
