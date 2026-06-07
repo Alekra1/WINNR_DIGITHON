@@ -200,8 +200,7 @@ export default function PeopleBoard({
                         type="checkbox"
                         checked={task.done}
                         onChange={() => toggle(task.id)}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded cursor-pointer"
-                        style={{ accentColor: "var(--accent-container)" }}
+                        className="task-check mt-px"
                         aria-label="Mark task done"
                       />
                       <span

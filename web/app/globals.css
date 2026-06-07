@@ -296,6 +296,56 @@ body {
   background: var(--accent-dim) !important;
 }
 
+/* ── Utility: task checkbox ─────────────────────────────────── */
+.task-check {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 0.4rem;
+  background: var(--bg-base);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  position: relative;
+  transition: background 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease, transform 0.08s ease;
+}
+.task-check:hover {
+  border-color: var(--accent);
+  background: var(--bg-surface-high);
+}
+.task-check:focus-visible {
+  outline: none;
+  border-color: var(--accent-container);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.task-check:active {
+  transform: scale(0.88);
+}
+.task-check:checked {
+  background: var(--accent-container);
+  border-color: var(--accent-container);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+}
+/* Drawn checkmark — animates in on check */
+.task-check::after {
+  content: "";
+  width: 0.34rem;
+  height: 0.62rem;
+  margin-top: -0.08rem;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.18s cubic-bezier(0.5, 0.2, 0.2, 1.5);
+}
+.task-check:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
 /* ── Material Symbols default variation ─────────────────────── */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
