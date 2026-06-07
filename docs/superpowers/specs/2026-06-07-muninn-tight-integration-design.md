@@ -67,6 +67,8 @@ Replace `writeMemories` with **`syncMemories(meeting)`**:
 ### Wiring
 - `processMeeting` → `syncMemories(updated)` (creates on first run). Upload = auto-store.
 - `POST /api/meetings/[id]/reindex` → `syncMemories` (now evolves).
+- `PATCH /api/meetings/[id]` (speaker rename / task edits) → `syncMemories` so edits flow to
+  Muninn automatically (evolve in place; renamed speakers create fresh snapshot memories).
 
 ### Chat — `app/api/chat/route.ts`, `lib/llm.ts`, `app/chat/page.tsx`
 - Request body: `{ question, scope, meetingId? }`.

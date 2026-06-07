@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { MeetingType, Task, Scope } from "@/lib/types";
+import type { MeetingType, Task, Scope, RecalledMemory } from "@/lib/types";
 
 const MODEL = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash";
 
@@ -142,20 +142,57 @@ Rules:
   }
 }
 
+/** Rough token estimate. ~4 chars/token is a safe over-approximation for English. */
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * Fit a meeting transcript into a token budget. If it fits, return it in full;
+ * otherwise fall back to the meeting summary (flagged truncated) so the chat
+ * call never blows the model's context window.
+ */
+export function fitTranscript(
+  transcript: string,
+  summary: string,
+  maxTokens = 12_000
+): { text: string; truncated: boolean } {
+  if (transcript.length <= maxTokens * CHARS_PER_TOKEN) {
+    return { text: transcript, truncated: false };
+  }
+  return { text: summary, truncated: true };
+}
+
+function renderMemories(memories: RecalledMemory[]): string {
+  if (memories.length === 0) return "(No memory context available.)";
+  return memories
+    .map((m) => {
+      const label = m.type ? `[${m.type}] ` : "";
+      return `- ${label}${m.summary || m.content || ""}`;
+    })
+    .join("\n");
+}
+
 export async function chat(
   question: string,
-  contextMemories: string[],
-  scope: Scope
+  opts: {
+    memories: RecalledMemory[];
+    scope: Scope;
+    transcript?: string;
+    transcriptTruncated?: boolean;
+  }
 ): Promise<string> {
-  const memoryBlock =
-    contextMemories.length > 0
-      ? contextMemories.join("\n---\n")
-      : "(No memory context available.)";
+  const memoryBlock = renderMemories(opts.memories);
+  const transcriptBlock = opts.transcript
+    ? `\n\nFull meeting transcript${
+        opts.transcriptTruncated
+          ? " (too long to include in full — meeting summary shown instead)"
+          : ""
+      }:\n${opts.transcript}`
+    : "";
 
-  const systemPrompt = `You are the company's meeting-intelligence assistant. Answer ONLY from the provided memory context. If the answer isn't in context, say you don't have that information. Scope: ${scope}.
+  const systemPrompt = `You are the company's meeting-intelligence assistant. Answer using ONLY the provided context (the transcript and/or memory below). If the answer isn't in context, say you don't have that information. Scope: ${opts.scope}.
 
 Memory context:
-${memoryBlock}`;
+${memoryBlock}${transcriptBlock}`;
 
   try {
     const response = await getClient().chat.completions.create({

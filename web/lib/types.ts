@@ -55,6 +55,18 @@ export interface EmployeeSnapshot {
   recommendation?: string; // optional one-line coaching note
 }
 
+/**
+ * Stable Muninn engram IDs for a meeting's memories, so re-syncs (reindex /
+ * speaker rename) `evolve` existing memories in place instead of creating
+ * duplicates. Populated on first successful sync. Note: `evolve` returns a new
+ * version ID each time, so these are rewritten on every update.
+ */
+export interface MuninnRefs {
+  summaryId: string;
+  snapshotIds: Record<string, string>; // employeeName -> engram id
+  taskIds: Record<string, string>; // task.id -> engram id
+}
+
 /** The full structured meeting object — UI source of truth, persisted via store.ts. */
 export interface Meeting {
   id: string;
@@ -74,6 +86,7 @@ export interface Meeting {
   snapshots: EmployeeSnapshot[];
   status: "processing" | "ready" | "error";
   error?: string;
+  muninnRefs?: MuninnRefs;
 }
 
 export interface ChatMessage {
@@ -81,5 +94,20 @@ export interface ChatMessage {
   content: string;
 }
 
-/** Chat memory scope. company = unscoped recall; project = entity-scoped. */
-export type Scope = "company" | "project";
+/**
+ * Chat memory scope.
+ * - company: broad recall across all meeting memories.
+ * - meeting: focused on one meeting — its full transcript is loaded (budget
+ *   permitting) plus a deep recall for cross-meeting context.
+ */
+export type Scope = "company" | "meeting";
+
+/** A memory returned by Muninn recall, with the fields the chat layer renders. */
+export interface RecalledMemory {
+  id?: string;
+  type?: string;
+  summary?: string;
+  content?: string;
+  concept?: string;
+  score?: number;
+}

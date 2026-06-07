@@ -6,13 +6,19 @@ import { transcribeAudio, deleteTranscript } from "@/lib/assembly";
 import { computeParticipation } from "@/lib/metrics";
 import { resolveName } from "@/lib/metrics";
 import { summarizeMeeting, generateTasks } from "@/lib/llm";
-import { rememberMemory } from "@/lib/muninn";
+import {
+  rememberMemory,
+  rememberBatch,
+  evolveMemory,
+  type MemoryInput,
+} from "@/lib/muninn";
 import { getMeeting, updateMeeting } from "@/lib/store";
 import type {
   Meeting,
   EmployeeSnapshot,
   Task,
   Participation,
+  MuninnRefs,
 } from "@/lib/types";
 
 function formatSpeakerTranscript(
@@ -48,75 +54,199 @@ export function buildSnapshots(
   }));
 }
 
-export interface MemoryWriteReport {
-  written: number;
+// ---------------------------------------------------------------------------
+// Muninn memory builders — one atomic, entity-tagged memory per concept.
+// ---------------------------------------------------------------------------
+
+/** Entities common to a meeting: project/department if present. */
+function meetingEntities(m: Meeting): { name: string; type: string }[] {
+  return [
+    ...(m.project ? [{ name: m.project, type: "project" }] : []),
+    ...(m.department ? [{ name: m.department, type: "department" }] : []),
+  ];
+}
+
+/** The meeting summary — the root memory that snapshots and tasks link to. */
+function summaryMemory(m: Meeting): MemoryInput {
+  const people = m.participation.map((p) => ({ name: p.employeeName, type: "person" }));
+  return {
+    content: `Meeting "${m.title}" (${m.type}) summary:\n${m.summary}`,
+    type: "meeting_summary",
+    // Muninn recall surfaces the `summary` field — put the substance there.
+    summary: `Summary of "${m.title}" (${m.type}): ${m.summary
+      .replace(/\s+/g, " ")
+      .slice(0, 450)}`,
+    entities: [{ name: m.title, type: "meeting" }, ...meetingEntities(m), ...people],
+  };
+}
+
+/** A per-person participation snapshot, linked under the summary. */
+function snapshotMemory(
+  m: Meeting,
+  s: EmployeeSnapshot,
+  summaryId?: string
+): MemoryInput {
+  const taskLine = s.tasks.length
+    ? ` Action items: ${s.tasks.map((t) => t.text).join("; ")}.`
+    : "";
+  const line = `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment score ${s.avgSentimentScore}).${taskLine}`;
+  return {
+    content: line,
+    type: "participation_snapshot",
+    summary: line,
+    entities: [
+      { name: s.employeeName, type: "person" },
+      { name: m.title, type: "meeting" },
+      ...meetingEntities(m),
+    ],
+    relationships: summaryId
+      ? [{ target_id: summaryId, relation: "is_part_of" }]
+      : undefined,
+  };
+}
+
+/** A single action item as an atomic memory, linked under the summary. */
+function taskMemory(m: Meeting, t: Task, summaryId?: string): MemoryInput {
+  const due = t.dueDate ? ` (due ${t.dueDate})` : "";
+  const line = `Action item from "${m.title}" for ${t.assignee}: ${t.text}${due}.`;
+  return {
+    content: line,
+    type: "task",
+    summary: line,
+    entities: [
+      { name: t.assignee, type: "person" },
+      { name: m.title, type: "meeting" },
+      ...meetingEntities(m),
+    ],
+    relationships: summaryId
+      ? [{ target_id: summaryId, relation: "is_part_of" }]
+      : undefined,
+  };
+}
+
+export interface MemorySyncReport {
+  created: number;
+  updated: number;
   failed: number;
   errors: string[];
 }
 
 /**
- * Persist atomic, entity-tagged memories to Muninn.
- * Sequential (avoids MCP session-init races) and logged (no silent failures).
- * Returns a report; callers decide whether to surface it.
+ * Sync a meeting's memories to Muninn idempotently.
+ *
+ * First run (no `muninnRefs`): `remember` the summary as a root, then one
+ * `remember_batch` of all snapshots + tasks (each `is_part_of` the summary),
+ * and persist the returned engram ids on the meeting.
+ *
+ * Later runs (reindex / speaker rename): `evolve` existing memories in place
+ * (no duplicates) and batch-create any new speaker/task. `evolve` returns a new
+ * version id, so refs are rewritten and re-persisted.
+ *
+ * Fail-soft per item, logged, counted. Whatever ids succeed are persisted.
  */
-export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
-  const people = m.participation.map((p) => ({
-    name: p.employeeName,
-    type: "person",
-  }));
-  const baseEntities = [
-    { name: m.title, type: "meeting" },
-    ...(m.project ? [{ name: m.project, type: "project" }] : []),
-    ...(m.department ? [{ name: m.department, type: "department" }] : []),
-    ...people,
-  ];
+export async function syncMemories(m: Meeting): Promise<MemorySyncReport> {
+  const report: MemorySyncReport = { created: 0, updated: 0, failed: 0, errors: [] };
+  const refs: MuninnRefs = m.muninnRefs
+    ? {
+        summaryId: m.muninnRefs.summaryId,
+        snapshotIds: { ...m.muninnRefs.snapshotIds },
+        taskIds: { ...m.muninnRefs.taskIds },
+      }
+    : { summaryId: "", snapshotIds: {}, taskIds: {} };
+  let changed = false;
 
-  const jobs: { label: string; args: Parameters<typeof rememberMemory>[0] }[] = [
-    {
-      label: "summary",
-      // Muninn recall surfaces the `summary` field — put the substance there.
-      args: {
-        content: `Meeting "${m.title}" (${m.type}) summary:\n${m.summary}`,
-        type: "meeting_summary",
-        summary: `Summary of "${m.title}" (${m.type}): ${m.summary
-          .replace(/\s+/g, " ")
-          .slice(0, 450)}`,
-        entities: baseEntities,
-      },
-    },
-    ...m.snapshots.map((s) => {
-      const taskLine = s.tasks.length
-        ? ` Action items: ${s.tasks.map((t) => t.text).join("; ")}.`
-        : "";
-      const line = `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment score ${s.avgSentimentScore}).${taskLine}`;
-      return {
-        label: `snapshot:${s.employeeName}`,
-        args: {
-          content: line,
-          type: "participation_snapshot",
-          summary: line,
-          entities: [
-            { name: s.employeeName, type: "person" },
-            { name: m.title, type: "meeting" },
-            ...(m.project ? [{ name: m.project, type: "project" }] : []),
-          ],
-        },
-      };
-    }),
-  ];
+  const fail = (label: string, e: unknown) => {
+    report.failed++;
+    const msg = `${label}: ${e instanceof Error ? e.message : String(e)}`;
+    report.errors.push(msg);
+    console.error("[muninn sync]", msg);
+  };
 
-  const report: MemoryWriteReport = { written: 0, failed: 0, errors: [] };
-  for (const job of jobs) {
+  // 1. Summary (root) — evolve if known, else create.
+  const summary = summaryMemory(m);
+  if (refs.summaryId) {
     try {
-      await rememberMemory(job.args);
-      report.written++;
+      refs.summaryId = await evolveMemory(refs.summaryId, summary.content, "meeting re-synced");
+      report.updated++;
+      changed = true;
     } catch (e) {
-      report.failed++;
-      const msg = `${job.label}: ${e instanceof Error ? e.message : String(e)}`;
-      report.errors.push(msg);
-      console.error("[muninn write failed]", msg);
+      fail("summary", e);
+    }
+  } else {
+    try {
+      refs.summaryId = await rememberMemory(summary);
+      report.created++;
+      changed = true;
+    } catch (e) {
+      fail("summary", e);
     }
   }
+  const summaryId = refs.summaryId || undefined;
+
+  // 2. Snapshots + tasks — evolve existing in place; collect new for one batch.
+  type Pending = { kind: "snapshot" | "task"; key: string; input: MemoryInput };
+  const pending: Pending[] = [];
+
+  for (const s of m.snapshots) {
+    const input = snapshotMemory(m, s, summaryId);
+    const existing = refs.snapshotIds[s.employeeName];
+    if (existing) {
+      try {
+        refs.snapshotIds[s.employeeName] = await evolveMemory(existing, input.content, "snapshot re-synced");
+        report.updated++;
+        changed = true;
+      } catch (e) {
+        fail(`snapshot:${s.employeeName}`, e);
+      }
+    } else {
+      pending.push({ kind: "snapshot", key: s.employeeName, input });
+    }
+  }
+
+  for (const t of m.tasks) {
+    const input = taskMemory(m, t, summaryId);
+    const existing = refs.taskIds[t.id];
+    if (existing) {
+      try {
+        refs.taskIds[t.id] = await evolveMemory(existing, input.content, "task re-synced");
+        report.updated++;
+        changed = true;
+      } catch (e) {
+        fail(`task:${t.id}`, e);
+      }
+    } else {
+      pending.push({ kind: "task", key: t.id, input });
+    }
+  }
+
+  if (pending.length) {
+    try {
+      const ids = await rememberBatch(pending.map((p) => p.input));
+      pending.forEach((p, i) => {
+        const id = ids[i];
+        if (id) {
+          if (p.kind === "snapshot") refs.snapshotIds[p.key] = id;
+          else refs.taskIds[p.key] = id;
+          report.created++;
+          changed = true;
+        } else {
+          fail(`${p.kind}:${p.key}`, new Error("batch returned no id"));
+        }
+      });
+    } catch (e) {
+      for (const p of pending) fail(`${p.kind}:${p.key}`, e);
+    }
+  }
+
+  // 3. Persist refs for whatever succeeded.
+  if (changed) {
+    try {
+      await updateMeeting(m.id, { muninnRefs: refs });
+    } catch (e) {
+      fail("persist-refs", e);
+    }
+  }
+
   return report;
 }
 
@@ -174,9 +304,9 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
     });
 
     if (updated) {
-      const report = await writeMemories(updated);
+      const report = await syncMemories(updated);
       console.log(
-        `[muninn] meeting ${id}: ${report.written} written, ${report.failed} failed`,
+        `[muninn] meeting ${id}: ${report.created} created, ${report.updated} updated, ${report.failed} failed`,
       );
     }
   } catch (e) {
