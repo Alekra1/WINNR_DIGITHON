@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMeeting, updateMeeting, deleteMeeting } from "@/lib/store";
 import { computeParticipation } from "@/lib/metrics";
-import { buildSnapshots } from "@/lib/pipeline";
+import { buildSnapshots, syncMemories } from "@/lib/pipeline";
 import { forgetMemory, forgetMemoriesByEntity } from "@/lib/muninn";
 import type { Meeting, MeetingType, SpeakerMap, Task } from "@/lib/types";
 
@@ -74,6 +74,14 @@ export async function PATCH(
     if (updated === null) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    // Keep Muninn in sync with the edit — evolves existing memories in place.
+    // Renamed speakers create fresh snapshot memories (old name left as-is).
+    const report = await syncMemories(updated);
+    console.log(
+      `[muninn] patch ${id}: ${report.created} created, ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
+    );
+
     return NextResponse.json(updated);
   } catch (e) {
     console.error("[PATCH /api/meetings/[id]]", e);

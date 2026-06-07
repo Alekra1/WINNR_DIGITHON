@@ -172,45 +172,17 @@ async function callMuninnTool(
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Result parsing helpers
 // ---------------------------------------------------------------------------
 
-/** Pull a memory id (ULID) out of muninn_remember's text payload. Returns null if absent. */
-function parseMemoryId(text: string): string | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  // Sometimes the payload is the bare ULID.
-  if (/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(trimmed)) return trimmed;
-  // Otherwise it's a JSON object — look for common id fields.
+/** Parse a tool result text payload as JSON, or null if it isn't JSON. */
+function parseJson(text: string): unknown {
+  if (!text) return null;
   try {
-    const obj = JSON.parse(trimmed) as Record<string, unknown>;
-    for (const key of ["id", "memory_id", "engram_id", "memoryId"]) {
-      if (typeof obj[key] === "string") return obj[key] as string;
-    }
+    return JSON.parse(text);
   } catch {
-    // not JSON
+    return null;
   }
-  return null;
-}
-
-/**
- * Store a memory in Muninn. Returns the created memory id (or null if the id
- * could not be parsed — non-fatal). Throws on hard RPC failure so callers
- * (e.g. ingest) can log it.
- */
-export async function rememberMemory(args: {
-  content: string;
-  type?: string;
-  summary?: string;
-  entities?: { name: string; type: string }[];
-}): Promise<string | null> {
-  const toolArgs: Record<string, unknown> = { vault: VAULT, content: args.content };
-  if (args.type !== undefined) toolArgs.type = args.type;
-  if (args.summary !== undefined) toolArgs.summary = args.summary;
-  if (args.entities !== undefined) toolArgs.entities = args.entities;
-
-  const text = await callMuninnTool("muninn_remember", toolArgs);
-  return parseMemoryId(text);
 }
 
 /** Forget (soft-delete, excluded from recall) a single memory by id. Fail-soft. */
@@ -233,13 +205,7 @@ export async function forgetMemoriesByEntity(entityName: string): Promise<void> 
       entity_name: entityName,
       limit: 50,
     });
-    if (!text) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return;
-    }
+    const parsed = parseJson(text);
     const items: unknown[] = Array.isArray(parsed)
       ? parsed
       : parsed && typeof parsed === "object"
@@ -262,13 +228,133 @@ export async function forgetMemoriesByEntity(entityName: string): Promise<void> 
 }
 
 /**
- * Recall memories relevant to the given context strings.
+ * Extract a single engram id from a remember/evolve result.
+ * Shape (verified): {"id":"01...","concept":""}. Defensive against {engram_id}.
+ */
+function extractId(text: string): string {
+  const obj = parseJson(text);
+  if (obj && typeof obj === "object") {
+    const o = obj as Record<string, unknown>;
+    const id = o.id ?? o.engram_id;
+    if (typeof id === "string" && id) return id;
+  }
+  throw new Error(`Muninn: could not parse engram id from result: ${text.slice(0, 200)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Public API — types
+// ---------------------------------------------------------------------------
+
+export interface MemoryInput {
+  content: string;
+  type?: string;
+  summary?: string;
+  concept?: string;
+  entities?: { name: string; type: string }[];
+  /** Associations to existing memories, created at write time. */
+  relationships?: { target_id: string; relation: string; weight?: number }[];
+}
+
+export interface RecalledMemory {
+  id?: string;
+  type?: string;
+  summary?: string;
+  content?: string;
+  concept?: string;
+  score?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Public API — writes
+// ---------------------------------------------------------------------------
+
+/** Build the tool-call arguments for a single memory (shared by remember/batch). */
+function toMemoryArgs(m: MemoryInput): Record<string, unknown> {
+  const args: Record<string, unknown> = { content: m.content };
+  if (m.type !== undefined) args.type = m.type;
+  if (m.summary !== undefined) args.summary = m.summary;
+  if (m.concept !== undefined) args.concept = m.concept;
+  if (m.entities !== undefined) args.entities = m.entities;
+  if (m.relationships !== undefined) args.relationships = m.relationships;
+  return args;
+}
+
+/**
+ * Store one memory in Muninn and return its engram id.
+ * Throws on hard failure so callers (e.g. ingest) can log it.
+ */
+export async function rememberMemory(m: MemoryInput): Promise<string> {
+  const text = await callMuninnTool("muninn_remember", { vault: VAULT, ...toMemoryArgs(m) });
+  return extractId(text);
+}
+
+/**
+ * Store up to 50 memories in one call. Returns engram ids aligned to the input
+ * order (`""` for any item the server did not store successfully).
+ * Result shape (verified): {"results":[{"index":0,"id":"01...","status":"ok"}],"total":N}.
+ */
+export async function rememberBatch(memories: MemoryInput[]): Promise<string[]> {
+  if (memories.length === 0) return [];
+  const text = await callMuninnTool("muninn_remember_batch", {
+    vault: VAULT,
+    memories: memories.map(toMemoryArgs),
+  });
+
+  const ids = new Array<string>(memories.length).fill("");
+  const parsed = parseJson(text) as { results?: unknown } | null;
+  const results = parsed && Array.isArray(parsed.results) ? parsed.results : [];
+  for (const r of results) {
+    if (r && typeof r === "object") {
+      const { index, id, status } = r as Record<string, unknown>;
+      if (
+        typeof index === "number" &&
+        index >= 0 &&
+        index < ids.length &&
+        typeof id === "string" &&
+        (status === undefined || status === "ok")
+      ) {
+        ids[index] = id;
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * Update a memory in place. Muninn versions the memory and returns the NEW
+ * version's id — callers must persist it to keep future evolves valid.
+ */
+export async function evolveMemory(
+  id: string,
+  newContent: string,
+  reason: string
+): Promise<string> {
+  const text = await callMuninnTool("muninn_evolve", {
+    vault: VAULT,
+    id,
+    new_content: newContent,
+    reason,
+  });
+  return extractId(text);
+}
+
+// ---------------------------------------------------------------------------
+// Public API — recall
+// ---------------------------------------------------------------------------
+
+/**
+ * Recall memories relevant to the given context strings, as structured objects.
  * Fail-soft: returns [] on any network or parse error.
  */
-export async function recallMemories(
+export async function recallStructured(
   context: string[],
-  opts?: { limit?: number; mode?: "recent" | "deep" }
-): Promise<string[]> {
+  opts?: {
+    limit?: number;
+    mode?: "semantic" | "recent" | "balanced" | "deep";
+    profile?: string;
+    threshold?: number;
+  }
+): Promise<RecalledMemory[]> {
   try {
     const toolArgs: Record<string, unknown> = {
       vault: VAULT,
@@ -276,65 +362,33 @@ export async function recallMemories(
       limit: opts?.limit ?? 8,
     };
     if (opts?.mode !== undefined) toolArgs.mode = opts.mode;
+    if (opts?.profile !== undefined) toolArgs.profile = opts.profile;
+    if (opts?.threshold !== undefined) toolArgs.threshold = opts.threshold;
 
     const text = await callMuninnTool("muninn_recall", toolArgs);
+    const parsed = parseJson(text);
+    if (!parsed || typeof parsed !== "object") return [];
 
-    if (!text) return [];
+    // Verified shape: { memories: [{ id, content, summary, concept, score, ... }], total }.
+    const raw = (parsed as Record<string, unknown>).memories;
+    if (!Array.isArray(raw)) return [];
 
-    // The result text is a JSON string. Parse it defensively.
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      // Not JSON — return the raw text as a single item if non-empty.
-      return text.trim() ? [text.trim()] : [];
-    }
-
-    // Expected shape: an array of memory objects with content/summary fields.
-    if (Array.isArray(parsed)) {
-      return parsed.flatMap((item: unknown) => {
-        if (typeof item === "string") return [item];
-        if (item && typeof item === "object") {
-          const m = item as Record<string, unknown>;
-          // Prefer summary, fall back to content, then any string field.
-          const snippet =
-            (typeof m.summary === "string" && m.summary) ||
-            (typeof m.content === "string" && m.content) ||
-            Object.values(m).find((v) => typeof v === "string") as string | undefined;
-          return snippet ? [snippet] : [];
-        }
-        return [];
-      });
-    }
-
-    // Wrapped shape: { memories: [...] } or similar.
-    if (parsed && typeof parsed === "object") {
-      const obj = parsed as Record<string, unknown>;
-      for (const key of ["memories", "results", "items", "data"]) {
-        if (Array.isArray(obj[key])) {
-          return (obj[key] as unknown[]).flatMap((item) => {
-            if (typeof item === "string") return [item];
-            if (item && typeof item === "object") {
-              const m = item as Record<string, unknown>;
-              const snippet =
-                (typeof m.content === "string" && m.content) ||
-                (typeof m.summary === "string" && m.summary) ||
-                Object.values(m).find((v) => typeof v === "string") as string | undefined;
-              return snippet ? [snippet] : [];
-            }
-            return [];
-          });
-        }
-      }
-      // Recall envelope with no matches (e.g. { memories: null, total: 0, hint }) → empty.
-      if ("memories" in obj || "results" in obj || "total" in obj) return [];
-      // Fallback: stringify the whole object as a single snippet.
-      return [JSON.stringify(parsed)];
-    }
-
-    return [];
+    return raw.flatMap((item): RecalledMemory[] => {
+      if (!item || typeof item !== "object") return [];
+      const m = item as Record<string, unknown>;
+      const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : undefined);
+      const mem: RecalledMemory = {
+        id: str("id"),
+        type: str("type") ?? str("type_label"),
+        summary: str("summary"),
+        content: str("content"),
+        concept: str("concept"),
+        score: typeof m.score === "number" ? m.score : undefined,
+      };
+      // Drop entries with no usable text.
+      return mem.summary || mem.content ? [mem] : [];
+    });
   } catch {
-    // Fail-soft for recall.
     return [];
   }
 }

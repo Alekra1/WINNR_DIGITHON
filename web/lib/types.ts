@@ -55,6 +55,24 @@ export interface EmployeeSnapshot {
   recommendation?: string; // optional one-line coaching note
 }
 
+/**
+ * Stable Muninn engram IDs for a meeting's memories, so re-syncs (reindex /
+ * speaker rename) `evolve` existing memories in place instead of creating
+ * duplicates. Populated on first successful sync. Note: `evolve` returns a new
+ * version ID each time, so these are rewritten on every update.
+ */
+export interface MuninnRefs {
+  summaryId: string;
+  snapshotIds: Record<string, string>; // employeeName -> engram id
+  taskIds: Record<string, string>; // task.id -> engram id
+  /**
+   * Content fingerprints keyed by logical id ("summary" | `snapshot:<name>` |
+   * `task:<id>`). Lets re-sync skip `evolve` when content is unchanged, which
+   * avoids needless version churn and keeps `is_part_of` edges intact.
+   */
+  hashes?: Record<string, string>;
+}
+
 /** The full structured meeting object — UI source of truth, persisted via store.ts. */
 export interface Meeting {
   id: string;
@@ -75,7 +93,8 @@ export interface Meeting {
   status: "processing" | "ready" | "error";
   error?: string;
   archived?: boolean; // soft-delete: hidden from default list, recoverable
-  memoryIds?: string[]; // Muninn memory ids written for this meeting (for forget-on-delete)
+  memoryIds?: string[]; // flat list of current Muninn ids (for forget-on-delete)
+  muninnRefs?: MuninnRefs; // structured ids + fingerprints for idempotent re-sync
 }
 
 export interface ChatMessage {
@@ -83,5 +102,20 @@ export interface ChatMessage {
   content: string;
 }
 
-/** Chat memory scope. company = unscoped recall; project = entity-scoped. */
-export type Scope = "company" | "project";
+/**
+ * Chat memory scope.
+ * - company: broad recall across all meeting memories.
+ * - meeting: focused on one meeting — its full transcript is loaded (budget
+ *   permitting) plus a deep recall for cross-meeting context.
+ */
+export type Scope = "company" | "meeting";
+
+/** A memory returned by Muninn recall, with the fields the chat layer renders. */
+export interface RecalledMemory {
+  id?: string;
+  type?: string;
+  summary?: string;
+  content?: string;
+  concept?: string;
+  score?: number;
+}

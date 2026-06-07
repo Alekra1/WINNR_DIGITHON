@@ -7,8 +7,11 @@ import Markdown from "@/components/Markdown";
 
 const SCOPE_LABELS: Record<Scope, string> = {
   company: "Company-wide",
-  project: "Project",
+  meeting: "Meeting",
 };
+
+/** Minimal meeting shape needed for the picker. */
+type MeetingOption = { id: string; title: string; status: string };
 
 const SUGGESTED_PROMPTS: { icon: string; title: string; question: string }[] = [
   { icon: "record_voice_over", title: "Top talker",    question: "Who spoke the most last week?" },
@@ -129,6 +132,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState("");
   const [scope, setScope] = useState<Scope>("company");
+  const [meetings, setMeetings] = useState<MeetingOption[]>([]);
+  const [meetingId, setMeetingId] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -139,6 +144,23 @@ export default function ChatPage() {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Load the meeting list for the Meeting-scope picker (ready meetings only).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/meetings");
+        if (!res.ok) return;
+        const all = (await res.json()) as MeetingOption[];
+        if (!mountedRef.current || !Array.isArray(all)) return;
+        const ready = all.filter((m) => m.status === "ready");
+        setMeetings(ready);
+        if (ready.length > 0) setMeetingId((cur) => cur || ready[0].id);
+      } catch {
+        /* fail-soft: picker just stays empty */
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -146,6 +168,18 @@ export default function ChatPage() {
   const send = useCallback(async () => {
     const question = input.trim();
     if (!question || loading) return;
+
+    if (scope === "meeting" && !meetingId) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "error",
+          content: "Select a meeting to ask about, or switch to Company-wide.",
+        },
+      ]);
+      return;
+    }
 
     setInput("");
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: question }]);
@@ -155,7 +189,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ question, scope }),
+        body:    JSON.stringify({ question, scope, ...(scope === "meeting" ? { meetingId } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -178,7 +212,7 @@ export default function ChatPage() {
         inputRef.current?.focus();
       }
     }
-  }, [input, loading, scope]);
+  }, [input, loading, scope, meetingId]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -213,28 +247,51 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Scope toggle */}
-        <div
-          role="group"
-          aria-label="Memory scope"
-          className="flex rounded-lg overflow-hidden"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          {(Object.keys(SCOPE_LABELS) as Scope[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setScope(s)}
-              aria-pressed={scope === s}
-              className="px-3 py-1.5 text-xs font-medium transition-colors duration-200"
-              style={
-                scope === s
-                  ? { background: "var(--accent-container)", color: "#fff" }
-                  : { background: "transparent", color: "var(--text-2)" }
-              }
+        {/* Scope toggle + meeting picker */}
+        <div className="flex items-center gap-2">
+          <div
+            role="group"
+            aria-label="Memory scope"
+            className="flex rounded-lg overflow-hidden"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            {(Object.keys(SCOPE_LABELS) as Scope[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setScope(s)}
+                aria-pressed={scope === s}
+                className="px-3 py-1.5 text-xs font-medium transition-colors duration-200"
+                style={
+                  scope === s
+                    ? { background: "var(--accent-container)", color: "#fff" }
+                    : { background: "transparent", color: "var(--text-2)" }
+                }
+              >
+                {SCOPE_LABELS[s]}
+              </button>
+            ))}
+          </div>
+
+          {scope === "meeting" && (
+            <select
+              aria-label="Meeting"
+              value={meetingId}
+              onChange={(e) => setMeetingId(e.target.value)}
+              className="rounded-lg px-2 py-1.5 text-xs font-medium max-w-[200px] outline-none"
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                color: "var(--text-1)",
+              }}
             >
-              {SCOPE_LABELS[s]}
-            </button>
-          ))}
+              {meetings.length === 0 && <option value="">No meetings yet</option>}
+              {meetings.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -354,7 +411,11 @@ export default function ChatPage() {
           className="mt-2 text-[10px] text-center"
           style={{ color: "var(--text-3)" }}
         >
-          Scope: <strong style={{ color: "var(--text-2)" }}>{SCOPE_LABELS[scope]}</strong>
+          Scope: <strong style={{ color: "var(--text-2)" }}>
+            {scope === "meeting"
+              ? meetings.find((m) => m.id === meetingId)?.title ?? "Meeting"
+              : SCOPE_LABELS[scope]}
+          </strong>
           &nbsp;· Shift+Enter for new line · The Knowledge Vault can make mistakes — verify important info.
         </p>
       </div>
