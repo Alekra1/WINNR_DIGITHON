@@ -24,6 +24,7 @@ const VAULT = process.env.MUNINN_VAULT ?? "winnr-hack";
 
 // Module-level session cache — lazily initialized, re-inited on session error.
 let sessionId: string | null = null;
+let initInFlight: Promise<string> | null = null;
 let callCounter = 1;
 
 function nextId(): number {
@@ -92,12 +93,20 @@ async function initialize(): Promise<string> {
   return sid;
 }
 
-/** Ensure we have a valid session id (lazy init). */
+/** Ensure we have a valid session id (lazy init, race-safe via shared promise). */
 async function ensureSession(): Promise<string> {
-  if (!sessionId) {
-    sessionId = await initialize();
+  if (sessionId) return sessionId;
+  if (!initInFlight) {
+    initInFlight = initialize()
+      .then((sid) => {
+        sessionId = sid;
+        return sid;
+      })
+      .finally(() => {
+        initInFlight = null;
+      });
   }
-  return sessionId;
+  return initInFlight;
 }
 
 /** Call a Muninn tool. Re-initializes session on session-related errors. */
@@ -140,7 +149,10 @@ async function callTool(
   }
 
   if (!res.ok) {
-    throw new Error(`Muninn tool call "${toolName}" failed: ${res.status} ${res.statusText}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `Muninn tool call "${toolName}" failed: ${res.status} ${res.statusText} ${body.slice(0, 300)}`,
+    );
   }
 
   return parseResponse(res);

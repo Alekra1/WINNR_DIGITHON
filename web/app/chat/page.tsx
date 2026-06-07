@@ -193,7 +193,7 @@ export default function ChatPage() {
           </span>
           <div>
             <h1 className="text-base font-bold" style={{ color: "var(--text-1)" }}>
-              Muninn Vault
+              Knowledge Vault
             </h1>
             <p className="text-xs" style={{ color: "var(--text-3)" }}>
               Ask anything about your meetings and team.
@@ -240,7 +240,7 @@ export default function ChatPage() {
 
             <div>
               <p className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
-                Muninn Knowledge Vault
+                Knowledge Vault
               </p>
               <p className="text-xs mt-1 max-w-xs mx-auto leading-relaxed" style={{ color: "var(--text-3)" }}>
                 I'm analyzing your transcripts, decisions, and action items. Ask me anything.
@@ -314,7 +314,7 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Muninn about meetings, teams, or action items… (Enter to send)"
+            placeholder="Ask the Knowledge Vault about meetings, teams, or action items… (Enter to send)"
             disabled={loading}
             className="flex-1 bg-transparent resize-none text-sm outline-none max-h-40 leading-relaxed"
             style={{ color: "var(--text-1)" }}
@@ -340,7 +340,7 @@ export default function ChatPage() {
           style={{ color: "var(--text-3)" }}
         >
           Scope: <strong style={{ color: "var(--text-2)" }}>{SCOPE_LABELS[scope]}</strong>
-          &nbsp;· Shift+Enter for new line · Muninn AI can make mistakes — verify important info.
+          &nbsp;· Shift+Enter for new line · The Knowledge Vault can make mistakes — verify important info.
         </p>
       </div>
     </div>

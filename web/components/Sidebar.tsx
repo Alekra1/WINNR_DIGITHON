@@ -14,7 +14,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/",     label: "Dashboard",    icon: "dashboard" },
-  { href: "/chat", label: "Muninn Vault", icon: "psychology" },
+  { href: "/chat", label: "Knowledge Vault", icon: "psychology" },
   { href: "#",     label: "Insights",     icon: "analytics",     disabled: true },
   { href: "#",     label: "Task Tracker", icon: "task_alt",      disabled: true },
   { href: "#",     label: "Recordings",   icon: "video_library", disabled: true },

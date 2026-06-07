@@ -27,8 +27,18 @@ export function buildSnapshots(
   }));
 }
 
-/** Persist atomic, entity-tagged memories to Muninn. Fail-soft. */
-async function writeMemories(m: Meeting): Promise<void> {
+export interface MemoryWriteReport {
+  written: number;
+  failed: number;
+  errors: string[];
+}
+
+/**
+ * Persist atomic, entity-tagged memories to Muninn.
+ * Sequential (avoids MCP session-init races) and logged (no silent failures).
+ * Returns a report; callers decide whether to surface it.
+ */
+export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
   const people = m.participation.map((p) => ({
     name: p.employeeName,
     type: "person",
@@ -40,36 +50,49 @@ async function writeMemories(m: Meeting): Promise<void> {
     ...people,
   ];
 
-  const jobs: Promise<unknown>[] = [];
-
-  jobs.push(
-    rememberMemory({
-      content: `Meeting "${m.title}" (${m.type}) summary:\n${m.summary}`,
-      type: "meeting_summary",
-      summary: m.title,
-      entities: baseEntities,
+  const jobs: { label: string; args: Parameters<typeof rememberMemory>[0] }[] = [
+    {
+      label: "summary",
+      args: {
+        content: `Meeting "${m.title}" (${m.type}) summary:\n${m.summary}`,
+        type: "meeting_summary",
+        summary: m.title,
+        entities: baseEntities,
+      },
+    },
+    ...m.snapshots.map((s) => {
+      const taskLine = s.tasks.length
+        ? ` Action items: ${s.tasks.map((t) => t.text).join("; ")}.`
+        : "";
+      return {
+        label: `snapshot:${s.employeeName}`,
+        args: {
+          content: `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment ${s.avgSentimentScore}).${taskLine}`,
+          type: "participation_snapshot",
+          summary: `${s.employeeName} in ${m.title}`,
+          entities: [
+            { name: s.employeeName, type: "person" },
+            { name: m.title, type: "meeting" },
+            ...(m.project ? [{ name: m.project, type: "project" }] : []),
+          ],
+        },
+      };
     }),
-  );
+  ];
 
-  for (const s of m.snapshots) {
-    const taskLine = s.tasks.length
-      ? ` Action items: ${s.tasks.map((t) => t.text).join("; ")}.`
-      : "";
-    jobs.push(
-      rememberMemory({
-        content: `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment ${s.avgSentimentScore}).${taskLine}`,
-        type: "participation_snapshot",
-        summary: `${s.employeeName} in ${m.title}`,
-        entities: [
-          { name: s.employeeName, type: "person" },
-          { name: m.title, type: "meeting" },
-          ...(m.project ? [{ name: m.project, type: "project" }] : []),
-        ],
-      }),
-    );
+  const report: MemoryWriteReport = { written: 0, failed: 0, errors: [] };
+  for (const job of jobs) {
+    try {
+      await rememberMemory(job.args);
+      report.written++;
+    } catch (e) {
+      report.failed++;
+      const msg = `${job.label}: ${e instanceof Error ? e.message : String(e)}`;
+      report.errors.push(msg);
+      console.error("[muninn write failed]", msg);
+    }
   }
-
-  await Promise.allSettled(jobs);
+  return report;
 }
 
 /** Full pipeline for a freshly uploaded meeting. Run fire-and-forget. */
@@ -102,7 +125,12 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
       status: "ready",
     });
 
-    if (updated) await writeMemories(updated);
+    if (updated) {
+      const report = await writeMemories(updated);
+      console.log(
+        `[muninn] meeting ${id}: ${report.written} written, ${report.failed} failed`,
+      );
+    }
   } catch (e) {
     await updateMeeting(id, {
       status: "error",
