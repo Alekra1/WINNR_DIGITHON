@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage, Scope } from "@/lib/types";
 import WinnrLogo from "@/components/WinnrLogo";
+import Markdown from "@/components/Markdown";
 
 const SCOPE_LABELS: Record<Scope, string> = {
   company: "Company-wide",
@@ -44,14 +45,14 @@ function AssistantBubble({ content }: { content: string }) {
         <WinnrLogo size={16} />
       </div>
       <div
-        className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap max-w-[80%]"
+        className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed max-w-[80%]"
         style={{
           background: "var(--bg-card)",
           border:     "1px solid var(--border)",
           color:      "var(--text-1)",
         }}
       >
-        {content}
+        <Markdown text={content} />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import type { Meeting, Task, SpeakerMap } from "@/lib/types";
 import { StatusBadge, TypeBadge, SentimentDot } from "@/components/Badge";
 import TaskList from "@/components/TaskList";
+import Markdown from "@/components/Markdown";
 
 const TalkTimeChart = dynamic(() => import("@/components/TalkTimeChart"), {
   ssr: false,
@@ -314,10 +315,10 @@ export default function MeetingDetail() {
           {meeting.summary && (
             <SectionCard title="Summary" icon="summarize">
               <div
-                className="text-sm leading-relaxed whitespace-pre-wrap"
+                className="text-sm leading-relaxed"
                 style={{ color: "var(--text-2)" }}
               >
-                {meeting.summary}
+                <Markdown text={meeting.summary} />
               </div>
             </SectionCard>
           )}
