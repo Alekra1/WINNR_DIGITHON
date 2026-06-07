@@ -120,7 +120,13 @@ export async function transcribeAudio(input: {
     };
   }
 
-  const transcript = await client.transcripts.transcribe(transcriptParams);
+  // Bound the poll: the SDK otherwise waits forever (pollingTimeout defaults to
+  // -1). universal-3-pro + speaker identification can run several minutes, but a
+  // genuinely stalled job must surface as an error — never hang the pipeline,
+  // leaving the meeting pinned to "processing" indefinitely.
+  const transcript = await client.transcripts.transcribe(transcriptParams, {
+    pollingTimeout: 7 * 60 * 1000,
+  });
 
   if (transcript.status === "error") {
     throw new Error(
