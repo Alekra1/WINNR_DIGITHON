@@ -10,11 +10,15 @@ export const SUPPORTED_AUDIO_EXT = [
   "ogg",
 ] as const;
 
-export const MAX_FILE_MB = 100;
+export const MAX_FILE_MB = 1024;
 export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
+/** Human-readable size cap (e.g. "1GB", "100MB"). */
+export const MAX_FILE_LABEL =
+  MAX_FILE_MB >= 1024 ? `${MAX_FILE_MB / 1024}GB` : `${MAX_FILE_MB}MB`;
+
 /** Human-readable accept hint shown in the UI. */
-export const ACCEPT_HINT = `${SUPPORTED_AUDIO_EXT.join(" · ")} — max ${MAX_FILE_MB}MB`;
+export const ACCEPT_HINT = `${SUPPORTED_AUDIO_EXT.join(" · ")} — max ${MAX_FILE_LABEL}`;
 
 /** <input accept="..."> value. */
 export const ACCEPT_ATTR =
@@ -30,7 +34,7 @@ export function validateUploadFile(
     return `Unsupported file type ".${ext}". Supported: ${SUPPORTED_AUDIO_EXT.join(", ")}.`;
   }
   if (sizeBytes > MAX_FILE_BYTES) {
-    return `File too large (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Max ${MAX_FILE_MB}MB.`;
+    return `File too large (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Max ${MAX_FILE_LABEL}.`;
   }
   if (sizeBytes === 0) {
     return "File is empty.";
