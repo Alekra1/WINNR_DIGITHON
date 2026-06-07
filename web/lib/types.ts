@@ -128,3 +128,17 @@ export type TrackerTask = Task & {
   meetingTitle: string | null;
   meetingType?: MeetingType;
 };
+
+/** Lightweight meeting card for the Recordings library (no transcript shipped to client). */
+export interface RecordingCard {
+  id: string;
+  title: string;
+  type: MeetingType;
+  status: "processing" | "ready" | "error";
+  createdAt: string;
+  durationSec: number;
+  project?: string;
+  summarySnippet: string;
+  taskCount: number;
+  participantCount: number;
+}
