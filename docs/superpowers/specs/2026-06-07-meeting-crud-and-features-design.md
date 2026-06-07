@@ -70,20 +70,30 @@ Decisions made during brainstorming:
 
 ---
 
-## Section 2 — Task Tracker (`/tasks`) — SPEC ONLY
+## Section 2 — Task Tracker (`/tasks`) — BUILD (design: `winnr_task_tracker_refined`)
 
-Cheapest feature; tasks already live inside each meeting.
+Aggregated task command center. Tasks come from meetings; standalone "manual" tasks are also supported.
 
-- **Data**: aggregate `tasks` across all non-archived meetings, attaching `meetingId` + `meetingTitle` to each task.
-- **API**: `GET /api/tasks` → flat list of `{ ...Task, meetingId, meetingTitle }`. Toggle done reuses existing `PATCH /api/meetings/[id]` tasks path (writes back to owning meeting, re-groups snapshots).
-- **UI**: single table — assignee, task text, source meeting (link), done checkbox. Filters: assignee, status (open/done), project. Optimistic done toggle.
-- **No new pipeline.** Pure aggregation + reuse of existing PATCH.
+Decisions (locked): LLM-assigned **priority**, **Add Manual Task**, **Sync with Jira** as a disabled "Soon" button, **due-date editing**.
+
+- **Data model**
+  - `Task` gains `priority?: "high" | "medium" | "low"`.
+  - Standalone tasks (no meeting): stored in `data/standalone-tasks.json` as `Task & { createdAt: string }`. New `lib/standaloneTasks.ts` mirrors `store.ts` (mutex chain, JSON file): list / add / update / delete.
+  - Tracker row shape: `TrackerTask = Task & { meetingId: string | null; meetingTitle: string | null; meetingType?: MeetingType }`. `meetingId === null` ⇒ manual task.
+- **LLM**: `generateTasks` also returns `priority` per task (prompt + parsing). Existing meetings' tasks without priority render as unset.
+- **API**
+  - `GET /api/tasks` → aggregated `TrackerTask[]` from all non-archived meetings + standalone store; open-first, then by dueDate/createdAt.
+  - `POST /api/tasks` → create a standalone task `{ text, assignee?, priority?, dueDate? }`.
+  - `PATCH /api/tasks/[id]` → body carries `meetingId: string | null`; routes to the owning meeting's task array (recompute snapshots) or the standalone store. Fields: done / text / assignee / priority / dueDate.
+  - `DELETE /api/tasks/[id]?meetingId=` → standalone removes from store; meeting task removes from its array (recompute snapshots).
+- **UI** (`/tasks`, adapt design layout to our theme): header "Execution Command Center"; **Filter** (status / assignee / priority) and disabled **Sync with Jira**; "Extracted Action Items" card with rows = checkbox, editable text (strike when done), priority badge (High/Med/Low → red/amber/neutral), due date, assignee; **Add Manual Task** inline/modal. Optimistic done toggle.
+- **Sidebar**: enable the "Task Tracker" nav item → `/tasks`.
 
 ---
 
 ## Section 3 — Insights (`/insights`) — SPEC ONLY
 
-All four facets.
+All four facets. **Metric honesty (locked): show only genuinely-computed or transparently-derived metrics** — talk%, sentiment + trend, turns, words, **words-per-minute pacing** (`words / talkTimeSec × 60`), task counts, and a clearly-defined **balance index** (evenness of talk-time distribution). No fabricated composite scores (the design's "Participation Quality 86" / "Team Avg Diff" are not reproduced as-is). AI Coach narrative grounded in these real aggregates. Design ref: `winnr_insights_performance`.
 
 - **Lib** `lib/insights.ts` (pure, unit-testable): folds over all meetings →
   - **Per-employee**: time series of talkPct, avg sentiment, task count across meetings (sorted by `createdAt`).
@@ -97,12 +107,12 @@ All four facets.
 
 ## Section 4 — Recordings (`/recordings`) — SPEC ONLY
 
-Transcript archive, no audio. Audio stays deleted post-processing.
+Transcript archive, no audio. Audio stays deleted post-processing. Design ref: `winnr_recordings_summaries` — but the design's **play button is dropped** (no audio retained); cards open the transcript instead.
 
 - **Data**: reuse meetings; no new store.
-- **Search**: full-text over `transcriptText` + speaker names + title. Client-side filter for MVP (small N); server-side search noted as the scale path.
-- **UI**: search bar + result list → transcript read view (speaker-labeled; reuse the detail page's transcript rendering). Filters: speaker, project, date range.
-- **Overlap note**: differs from Dashboard by being transcript/search-centric rather than upload/status-centric.
+- **Search**: **server-side** `GET /api/recordings?q=` greps `transcriptText` + speaker names + title and returns matches *without* shipping full transcripts to the client (transcripts are large).
+- **UI**: search bar + Filter/Sort + card grid (title, summary snippet, date · duration, status badge, insight/task count). Card → meeting detail (transcript lives there). A "view transcript" affordance replaces the play button.
+- **Overlap note**: differentiator vs Dashboard = transcript full-text search + no upload form.
 
 ---
 
