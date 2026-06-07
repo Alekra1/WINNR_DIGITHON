@@ -72,6 +72,22 @@ export default function MeetingDetail() {
   const [savingTasks, setSavingTasks] = useState(false);
   const [taskSaveError, setTaskSaveError] = useState<string | null>(null);
 
+  // ── Jira integration ───────────────────────────────────────────────────────
+  const [jiraEnabled, setJiraEnabled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/meetings/${id}/jira`)
+      .then((r) => (r.ok ? r.json() : { configured: false }))
+      .then((d) => {
+        if (active) setJiraEnabled(Boolean(d.configured));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   // ── Deduplicated diarization labels (B3/perf fix) ──────────────────────────
   const diarizationLabels = useMemo(() => {
     if (!meeting) return [];
@@ -121,6 +137,23 @@ export default function MeetingDetail() {
       setTaskSaveError((err as Error).message);
     } finally {
       setSavingTasks(false);
+    }
+  }
+
+  // ── Push action items to Jira (one-way) ────────────────────────────────────
+  // Throws on hard failure so PeopleBoard can surface it inline.
+  async function pushToJira(taskIds: string[]) {
+    const res = await fetch(`/api/meetings/${id}/jira`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    if (data.meeting) setMeeting(data.meeting);
+    if (data.failed > 0) {
+      const firstErr = data.results?.find((r: { error?: string }) => r.error)?.error;
+      throw new Error(firstErr ?? `${data.failed} task(s) failed to sync`);
     }
   }
 
@@ -285,6 +318,8 @@ export default function MeetingDetail() {
             onSave={saveTasks}
             saving={savingTasks}
             error={taskSaveError}
+            jiraEnabled={jiraEnabled}
+            onPushToJira={pushToJira}
           />
         </>
       )}

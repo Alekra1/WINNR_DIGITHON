@@ -16,6 +16,8 @@ interface Props {
   onSave: (tasks: Task[]) => Promise<void>;
   saving: boolean;
   error: string | null;
+  jiraEnabled?: boolean;
+  onPushToJira?: (taskIds: string[]) => Promise<void>;
 }
 
 // Full-width board: one column per person. Tasks are draggable chips — drop a
@@ -28,10 +30,31 @@ export default function PeopleBoard({
   onSave,
   saving,
   error,
+  jiraEnabled,
+  onPushToJira,
 }: Props) {
   const [local, setLocal] = useState<Task[]>(tasks);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [pushing, setPushing] = useState<Set<string>>(new Set());
+  const [jiraError, setJiraError] = useState<string | null>(null);
+
+  async function pushJira(ids: string[]) {
+    if (!onPushToJira || ids.length === 0) return;
+    setJiraError(null);
+    setPushing((p) => new Set([...p, ...ids]));
+    try {
+      await onPushToJira(ids);
+    } catch (e) {
+      setJiraError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPushing((p) => {
+        const next = new Set(p);
+        ids.forEach((i) => next.delete(i));
+        return next;
+      });
+    }
+  }
 
   // Re-sync from the server copy when a poll/save returns a new tasks array.
   // Render-time adjustment (React's recommended alternative to a sync effect).
@@ -92,9 +115,33 @@ export default function PeopleBoard({
     );
   }
 
+  const unpushedIds = local.filter((t) => !t.jiraKey).map((t) => t.id);
+  const pushingAll = unpushedIds.length > 0 && unpushedIds.every((i) => pushing.has(i));
+
   return (
     <section className="space-y-4">
-      <SectionHeader saving={saving} error={error} />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <SectionHeader saving={saving} error={error} />
+        {jiraEnabled && onPushToJira && unpushedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => pushJira(unpushedIds)}
+            disabled={pushingAll}
+            className="btn-ghost text-xs"
+            title="Create Jira issues for all action items"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+              {pushingAll ? "hourglass_top" : "sync"}
+            </span>
+            {pushingAll ? "Syncing…" : "Push to Jira"}
+          </button>
+        )}
+      </div>
+      {jiraError && (
+        <p className="text-xs" style={{ color: "var(--red)" }}>
+          Jira: {jiraError}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {order.map((name) => {
@@ -212,6 +259,54 @@ export default function PeopleBoard({
                       >
                         {task.text}
                       </span>
+
+                      {/* Jira: link if pushed, send button otherwise */}
+                      {task.jiraKey ? (
+                        <a
+                          href={task.jiraUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          draggable={false}
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 badge"
+                          style={{
+                            background: "rgba(37,99,235,0.14)",
+                            color: "#7aa2ff",
+                            border: "1px solid rgba(37,99,235,0.3)",
+                            fontSize: "10px",
+                          }}
+                          title={`View ${task.jiraKey} in Jira`}
+                        >
+                          {task.jiraKey}
+                        </a>
+                      ) : jiraEnabled && onPushToJira ? (
+                        <button
+                          type="button"
+                          draggable={false}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            pushJira([task.id]);
+                          }}
+                          disabled={pushing.has(task.id)}
+                          aria-label="Send task to Jira"
+                          title="Send to Jira"
+                          className="shrink-0 flex items-center justify-center rounded-md transition-colors"
+                          style={{
+                            width: 24,
+                            height: 24,
+                            color: "var(--text-3)",
+                            border: "1px solid var(--border)",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: 14 }}
+                          >
+                            {pushing.has(task.id) ? "hourglass_top" : "sync"}
+                          </span>
+                        </button>
+                      ) : null}
                     </div>
                   ))
                 )}

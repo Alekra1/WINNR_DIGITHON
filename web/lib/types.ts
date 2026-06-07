@@ -45,6 +45,8 @@ export interface Task {
   done: boolean;
   dueDate?: string; // ISO date, optional
   priority?: "high" | "medium" | "low";
+  jiraKey?: string; // e.g. "WINNR-123" once pushed to Jira
+  jiraUrl?: string; // browse URL for the issue
 }
 
 /** Per-employee snapshot for one meeting. */
