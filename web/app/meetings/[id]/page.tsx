@@ -246,7 +246,7 @@ export default function MeetingDetail() {
           <div className="grid gap-5 items-start lg:grid-cols-[minmax(0,1fr)_340px]">
             {/* Main column */}
             <div className="space-y-5 min-w-0">
-              <AskAboutMeeting title={meeting.title} />
+              <AskAboutMeeting meetingId={meeting.id} title={meeting.title} />
 
               {meeting.summary && (
                 <SectionCard title="Summary" icon="summarize">
