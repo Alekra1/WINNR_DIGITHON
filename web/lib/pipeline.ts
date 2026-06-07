@@ -53,10 +53,13 @@ export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
   const jobs: { label: string; args: Parameters<typeof rememberMemory>[0] }[] = [
     {
       label: "summary",
+      // Muninn recall surfaces the `summary` field — put the substance there.
       args: {
         content: `Meeting "${m.title}" (${m.type}) summary:\n${m.summary}`,
         type: "meeting_summary",
-        summary: m.title,
+        summary: `Summary of "${m.title}" (${m.type}): ${m.summary
+          .replace(/\s+/g, " ")
+          .slice(0, 450)}`,
         entities: baseEntities,
       },
     },
@@ -64,12 +67,13 @@ export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
       const taskLine = s.tasks.length
         ? ` Action items: ${s.tasks.map((t) => t.text).join("; ")}.`
         : "";
+      const line = `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment score ${s.avgSentimentScore}).${taskLine}`;
       return {
         label: `snapshot:${s.employeeName}`,
         args: {
-          content: `In "${m.title}", ${s.employeeName} spoke ${s.talkPct}% of the time (sentiment ${s.avgSentimentScore}).${taskLine}`,
+          content: line,
           type: "participation_snapshot",
-          summary: `${s.employeeName} in ${m.title}`,
+          summary: line,
           entities: [
             { name: s.employeeName, type: "person" },
             { name: m.title, type: "meeting" },
