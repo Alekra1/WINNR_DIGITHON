@@ -278,7 +278,8 @@ export default function RecordingsPage() {
         </span>
         <input
           type="search"
-          className="input w-full pl-10"
+          className="input w-full"
+          style={{ paddingLeft: "2.5rem" }}
           placeholder="Search by title, transcript, or participant…"
           value={query}
           onChange={handleQueryChange}
