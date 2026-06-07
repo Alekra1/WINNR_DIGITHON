@@ -86,7 +86,7 @@ export default function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-bold leading-tight" style={{ color: "var(--text-1)" }}>
-            WINNR
+            Meety
           </div>
           <div className="text-[11px] leading-tight" style={{ color: "var(--text-3)" }}>
             Meeting Intelligence

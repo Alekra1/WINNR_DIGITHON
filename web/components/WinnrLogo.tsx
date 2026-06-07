@@ -1,4 +1,4 @@
-/** WINNR bolt-flash logo, derived from the stitch SVG asset. */
+/** Meety bolt-flash logo, derived from the stitch SVG asset. */
 export default function WinnrLogo({ size = 24 }: { size?: number }) {
   return (
     <svg
@@ -12,7 +12,7 @@ export default function WinnrLogo({ size = 24 }: { size?: number }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       role="img"
-      aria-label="WINNR logo"
+      aria-label="Meety logo"
     >
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
     </svg>

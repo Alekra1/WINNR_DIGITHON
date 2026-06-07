@@ -1,4 +1,4 @@
-# WINNR — AI Meeting Intelligence
+# Meety — AI Meeting Intelligence
 
 Upload a meeting recording and get back a speaker-separated transcript, a meeting-type-aware summary, per-employee participation metrics, auto-generated tasks, and a memory-aware AI chat that answers questions grounded in everything that's been discussed.
 

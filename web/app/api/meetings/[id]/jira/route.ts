@@ -57,10 +57,10 @@ export async function POST(
 
     for (const task of targets) {
       const description =
-        `From WINNR meeting "${meeting.title}".\nAssignee: ${task.assignee}.` +
+        `From Meety meeting "${meeting.title}".\nAssignee: ${task.assignee}.` +
         (task.dueDate ? `\nDue: ${task.dueDate}.` : "") +
         (task.priority ? `\nPriority: ${task.priority}.` : "") +
-        `\n\nCreated automatically by WINNR Meeting Intelligence.`;
+        `\n\nCreated automatically by Meety Meeting Intelligence.`;
 
       try {
         const { key, url } = await createJiraIssue({

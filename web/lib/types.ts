@@ -1,4 +1,4 @@
-// Shared domain types for the WINNR meeting-intelligence MVP.
+// Shared domain types for the Meety meeting-intelligence MVP.
 // All modules build against these. Do not change shapes without coordinating.
 
 export type MeetingType =

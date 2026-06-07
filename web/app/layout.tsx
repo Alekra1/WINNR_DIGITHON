@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "WINNR · Meeting Intelligence",
+  title: "Meety · Meeting Intelligence",
   description: "AI-powered meeting analysis and team insights",
 };
 
