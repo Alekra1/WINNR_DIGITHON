@@ -1,34 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { Meeting, Task, SpeakerMap } from "@/lib/types";
+import type { Task, SpeakerMap } from "@/lib/types";
 import { StatusBadge, TypeBadge, SentimentDot } from "@/components/Badge";
 import TaskList from "@/components/TaskList";
 import Markdown from "@/components/Markdown";
+import { useMeeting } from "@/hooks/useMeeting";
+import { formatDuration, formatDate } from "@/lib/utils";
 
 const TalkTimeChart = dynamic(() => import("@/components/TalkTimeChart"), {
   ssr: false,
 });
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    weekday: "short",
-    month:   "short",
-    day:     "numeric",
-    year:    "numeric",
-  });
-}
-
-function formatDuration(sec: number) {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
 
 function SectionCard({
   title,
@@ -61,85 +45,80 @@ function SectionCard({
 
 export default function MeetingDetail() {
   const { id } = useParams<{ id: string }>();
-  const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { meeting, loading, error: fetchError, setMeeting } = useMeeting(id);
 
-  // Speaker map editing
+  // ── Speaker map draft (B2 fix) ─────────────────────────────────────────────
+  // Initialised once from the first "ready" meeting; never overwritten by polls.
   const [speakerMap, setSpeakerMap] = useState<SpeakerMap>({});
+  const speakerMapInitialisedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      !speakerMapInitialisedRef.current &&
+      meeting !== null &&
+      meeting.status !== "processing"
+    ) {
+      speakerMapInitialisedRef.current = true;
+      setSpeakerMap(meeting.speakerMap ?? {});
+    }
+  }, [meeting]);
+
+  // ── Speaker-map save state ─────────────────────────────────────────────────
   const [savingMap, setSavingMap] = useState(false);
   const [mapSaved, setMapSaved] = useState(false);
+  const [mapSaveError, setMapSaveError] = useState<string | null>(null);
 
-  // Tasks saving
+  // ── Tasks save state ───────────────────────────────────────────────────────
   const [savingTasks, setSavingTasks] = useState(false);
+  const [taskSaveError, setTaskSaveError] = useState<string | null>(null);
 
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── Deduplicated diarization labels (B3/perf fix) ──────────────────────────
+  const diarizationLabels = useMemo(() => {
+    if (!meeting) return [];
+    const seen = new Set<string>();
+    for (const u of meeting.utterances) seen.add(u.speaker);
+    return Array.from(seen).sort();
+  }, [meeting]);
 
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
+  // ── PATCH helper ──────────────────────────────────────────────────────────
+  const handlePatch = useCallback(
+    async (body: { speakerMap?: SpeakerMap; tasks?: Task[] }) => {
+      const res = await fetch(`/api/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`PATCH failed: HTTP ${res.status}`);
+      return res.json();
+    },
+    [id]
+  );
 
-  const fetchMeeting = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/meetings/${id}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: Meeting = await res.json();
-      setMeeting(data);
-      setSpeakerMap(data.speakerMap ?? {});
-      if (data.status !== "processing") stopPolling();
-      setFetchError(null);
-    } catch (err) {
-      setFetchError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, stopPolling]);
-
-  useEffect(() => {
-    fetchMeeting();
-    return () => stopPolling();
-  }, [fetchMeeting, stopPolling]);
-
-  useEffect(() => {
-    if (meeting?.status === "processing" && !pollingRef.current) {
-      pollingRef.current = setInterval(fetchMeeting, 4000);
-    }
-  }, [meeting?.status, fetchMeeting]);
-
-  async function handlePatch(body: { speakerMap?: SpeakerMap; tasks?: Task[] }) {
-    const res = await fetch(`/api/meetings/${id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`PATCH failed: HTTP ${res.status}`);
-    const updated: Meeting = await res.json();
-    setMeeting(updated);
-    return updated;
-  }
-
+  // ── Save speaker map (B3 fix: surfaces error inline) ──────────────────────
   async function saveSpeakerMap() {
     setSavingMap(true);
+    setMapSaveError(null);
     try {
-      await handlePatch({ speakerMap });
+      const updated = await handlePatch({ speakerMap });
+      setMeeting(updated);
       setMapSaved(true);
       setTimeout(() => setMapSaved(false), 2000);
-    } catch {
-      // silently fail; user can retry
+    } catch (err) {
+      setMapSaveError((err as Error).message);
     } finally {
       setSavingMap(false);
     }
   }
 
+  // ── Save tasks (B3 fix: surfaces error inline) ─────────────────────────────
   async function saveTasks(tasks: Task[]) {
     setSavingTasks(true);
+    setTaskSaveError(null);
     try {
-      await handlePatch({ tasks });
-    } catch {
-      // silently fail
+      const updated = await handlePatch({ tasks });
+      setMeeting(updated);
+    } catch (err) {
+      setTaskSaveError((err as Error).message);
     } finally {
       setSavingTasks(false);
     }
@@ -171,13 +150,6 @@ export default function MeetingDetail() {
     );
   }
 
-  const diarizationLabels = Object.keys(
-    meeting.utterances.reduce<Record<string, true>>((acc, u) => {
-      acc[u.speaker] = true;
-      return acc;
-    }, {})
-  ).sort();
-
   return (
     <div className="max-w-4xl mx-auto px-6 py-10 space-y-5">
       {/* ── (a) Header ── */}
@@ -190,10 +162,11 @@ export default function MeetingDetail() {
             >
               {meeting.title}
             </h1>
+            {/* Status badges only — no redundant inline Spinner here (B1 fix).
+                The full processing card below is the single processing indicator. */}
             <div className="flex flex-wrap items-center gap-2">
               <TypeBadge type={meeting.type} />
               <StatusBadge status={meeting.status} />
-              {meeting.status === "processing" && <Spinner small />}
             </div>
           </div>
           <div className="text-right space-y-1 shrink-0">
@@ -214,7 +187,7 @@ export default function MeetingDetail() {
             className="mt-5 flex items-start gap-3 rounded-xl px-4 py-4"
             style={{
               background: "rgba(239,68,68,0.1)",
-              border:     "1px solid rgba(239,68,68,0.3)",
+              border: "1px solid rgba(239,68,68,0.3)",
             }}
           >
             <span
@@ -237,7 +210,7 @@ export default function MeetingDetail() {
         )}
       </div>
 
-      {/* ── Processing placeholder ── */}
+      {/* ── Processing placeholder (sole processing indicator) ── */}
       {meeting.status === "processing" && (
         <div className="card p-12 text-center space-y-4">
           <Spinner />
@@ -271,14 +244,15 @@ export default function MeetingDetail() {
                       className="shrink-0 w-16 text-xs font-mono rounded-lg px-2 py-1 text-center"
                       style={{
                         background: "var(--bg-surface)",
-                        color:      "var(--accent)",
-                        border:     "1px solid var(--border)",
+                        color: "var(--accent)",
+                        border: "1px solid var(--border)",
                       }}
                     >
                       {label}
                     </span>
                     <input
                       type="text"
+                      aria-label={`Name for speaker ${label}`}
                       value={speakerMap[label] ?? ""}
                       placeholder={`Speaker ${label}`}
                       onChange={(e) =>
@@ -295,7 +269,9 @@ export default function MeetingDetail() {
                   disabled={savingMap}
                   className="btn-primary text-sm"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                    save
+                  </span>
                   {savingMap ? "Saving…" : "Save names"}
                 </button>
                 {mapSaved && (
@@ -303,8 +279,16 @@ export default function MeetingDetail() {
                     className="flex items-center gap-1 text-xs"
                     style={{ color: "var(--green)" }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                      check_circle
+                    </span>
                     Saved!
+                  </span>
+                )}
+                {/* B3 fix: inline save error for speaker map */}
+                {mapSaveError && (
+                  <span className="text-xs" style={{ color: "var(--red)" }}>
+                    {mapSaveError}
                   </span>
                 )}
               </div>
@@ -314,10 +298,7 @@ export default function MeetingDetail() {
           {/* (d) Summary */}
           {meeting.summary && (
             <SectionCard title="Summary" icon="summarize">
-              <div
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--text-2)" }}
-              >
+              <div className="text-sm leading-relaxed" style={{ color: "var(--text-2)" }}>
                 <Markdown text={meeting.summary} />
               </div>
             </SectionCard>
@@ -326,6 +307,12 @@ export default function MeetingDetail() {
           {/* (e) Tasks */}
           <SectionCard title="Action items" icon="task_alt">
             <TaskList tasks={meeting.tasks} onSave={saveTasks} saving={savingTasks} />
+            {/* B3 fix: inline save error for tasks */}
+            {taskSaveError && (
+              <p className="text-xs mt-2" style={{ color: "var(--red)" }}>
+                {taskSaveError}
+              </p>
+            )}
           </SectionCard>
 
           {/* (f) Per-employee snapshots */}
@@ -338,7 +325,7 @@ export default function MeetingDetail() {
                     className="rounded-xl p-4 space-y-3"
                     style={{
                       background: "var(--bg-surface)",
-                      border:     "1px solid var(--border)",
+                      border: "1px solid var(--border)",
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -349,7 +336,10 @@ export default function MeetingDetail() {
                         >
                           account_circle
                         </span>
-                        <span className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: "var(--text-1)" }}
+                        >
                           {snap.employeeName}
                         </span>
                       </div>
@@ -365,9 +355,7 @@ export default function MeetingDetail() {
                       </span>
                       <span style={{ color: "var(--text-3)" }}>
                         Tasks:&nbsp;
-                        <span style={{ color: "var(--text-2)" }}>
-                          {snap.tasks.length}
-                        </span>
+                        <span style={{ color: "var(--text-2)" }}>{snap.tasks.length}</span>
                       </span>
                     </div>
 
@@ -382,14 +370,19 @@ export default function MeetingDetail() {
                             <span
                               className="mt-0.5 h-1.5 w-1.5 rounded-full shrink-0"
                               style={{
-                                background: t.done ? "var(--green)" : "var(--accent-container)",
-                                marginTop:  "5px",
+                                background: t.done
+                                  ? "var(--green)"
+                                  : "var(--accent-container)",
+                                marginTop: "5px",
                               }}
                             />
                             <span
                               style={
                                 t.done
-                                  ? { textDecoration: "line-through", color: "var(--text-3)" }
+                                  ? {
+                                      textDecoration: "line-through",
+                                      color: "var(--text-3)",
+                                    }
                                   : {}
                               }
                             >
@@ -404,7 +397,7 @@ export default function MeetingDetail() {
                       <p
                         className="text-xs italic border-t pt-3 leading-relaxed"
                         style={{
-                          color:       "var(--text-3)",
+                          color: "var(--text-3)",
                           borderColor: "var(--border)",
                         }}
                       >
@@ -428,7 +421,7 @@ function Spinner({ small }: { small?: boolean }) {
     <div
       className={`${size} rounded-full animate-spin inline-block`}
       style={{
-        borderColor:    "var(--accent-container)",
+        borderColor: "var(--accent-container)",
         borderTopColor: "transparent",
       }}
     />

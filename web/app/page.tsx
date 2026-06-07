@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Meeting, MeetingType } from "@/lib/types";
 import { StatusBadge, TypeBadge } from "@/components/Badge";
 import { ACCEPT_ATTR, ACCEPT_HINT, validateUploadFile } from "@/lib/constants";
+import { formatDate, formatDuration } from "@/lib/utils";
 
 const MEETING_TYPES: MeetingType[] = [
   "standup",
@@ -24,20 +25,6 @@ const TYPE_LABELS: Record<MeetingType, string> = {
   review:     "Review",
   other:      "Other",
 };
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day:   "numeric",
-    year:  "numeric",
-  });
-}
-
-function formatDuration(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
 
 function topTalker(meeting: Meeting): string | null {
   if (!meeting.participation || meeting.participation.length === 0) return null;
@@ -215,7 +202,15 @@ export default function MeetingsDashboard() {
                 border:     `2px dashed ${uploadError ? "var(--red)" : "var(--border)"}`,
                 background: "var(--bg-surface)",
               }}
+              role="button"
+              tabIndex={0}
               onClick={() => fileRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileRef.current?.click();
+                }
+              }}
             >
               <span
                 className="material-symbols-outlined shrink-0"
@@ -333,53 +328,56 @@ export default function MeetingsDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {meetings.map((m) => (
-              <Link
-                key={m.id}
-                href={`/meetings/${m.id}`}
-                className="card card-hover p-5 flex flex-col gap-3 group"
-              >
-                {/* Top row */}
-                <div className="flex items-start justify-between gap-2">
-                  <h3
-                    className="text-sm font-semibold leading-snug line-clamp-2 transition-colors duration-200 group-hover:text-[var(--accent)]"
-                    style={{ color: "var(--text-1)" }}
-                  >
-                    {m.title}
-                  </h3>
-                  <StatusBadge status={m.status} />
-                </div>
-
-                {/* Meta row */}
-                <div className="flex flex-wrap gap-2 items-center">
-                  <TypeBadge type={m.type} />
-                  <span className="text-xs" style={{ color: "var(--text-3)" }}>
-                    {formatDate(m.createdAt)}
-                  </span>
-                  {m.durationSec > 0 && (
-                    <span className="text-xs" style={{ color: "var(--text-3)" }}>
-                      · {formatDuration(m.durationSec)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Top talker */}
-                {topTalker(m) && (
-                  <div
-                    className="flex items-center gap-1.5 text-xs mt-auto pt-2"
-                    style={{
-                      color:     "var(--text-2)",
-                      borderTop: "1px solid var(--border)",
-                    }}
-                  >
-                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>
-                      person
-                    </span>
-                    {topTalker(m)}
+            {meetings.map((m) => {
+              const leader = topTalker(m);
+              return (
+                <Link
+                  key={m.id}
+                  href={`/meetings/${m.id}`}
+                  className="card card-hover p-5 flex flex-col gap-3 group"
+                >
+                  {/* Top row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className="text-sm font-semibold leading-snug line-clamp-2 transition-colors duration-200 group-hover:text-[var(--accent)]"
+                      style={{ color: "var(--text-1)" }}
+                    >
+                      {m.title}
+                    </h3>
+                    <StatusBadge status={m.status} />
                   </div>
-                )}
-              </Link>
-            ))}
+
+                  {/* Meta row */}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <TypeBadge type={m.type} />
+                    <span className="text-xs" style={{ color: "var(--text-3)" }}>
+                      {formatDate(m.createdAt)}
+                    </span>
+                    {m.durationSec > 0 && (
+                      <span className="text-xs" style={{ color: "var(--text-3)" }}>
+                        · {formatDuration(m.durationSec)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Top talker */}
+                  {leader && (
+                    <div
+                      className="flex items-center gap-1.5 text-xs mt-auto pt-2"
+                      style={{
+                        color:     "var(--text-2)",
+                        borderTop: "1px solid var(--border)",
+                      }}
+                    >
+                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>
+                        person
+                      </span>
+                      {leader}
+                    </div>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

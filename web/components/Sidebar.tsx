@@ -25,6 +25,33 @@ const FOOTER_ITEMS: NavItem[] = [
   { href: "#", label: "Support",  icon: "help",     disabled: true },
 ];
 
+function DisabledNavItem({ item }: { item: NavItem }) {
+  return (
+    <div
+      key={item.label}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-default select-none"
+      style={{ color: "var(--text-3)" }}
+      aria-disabled="true"
+    >
+      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>
+        {item.icon}
+      </span>
+      <span className="text-sm flex-1">{item.label}</span>
+      <span
+        className="badge"
+        style={{
+          background: "rgba(141,144,160,0.15)",
+          color: "var(--text-3)",
+          fontSize: "10px",
+          padding: "1px 6px",
+        }}
+      >
+        Soon
+      </span>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
 
@@ -36,9 +63,8 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col shrink-0"
+      className="flex flex-col shrink-0 w-60"
       style={{
-        width: "240px",
         minHeight: "100vh",
         background: "var(--bg-card)",
         borderRight: "1px solid var(--border)",
@@ -86,34 +112,13 @@ export default function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const active = isActive(item);
           if (item.disabled) {
-            return (
-              <div
-                key={item.label}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-default select-none"
-                style={{ color: "var(--text-3)" }}
-              >
-                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>
-                  {item.icon}
-                </span>
-                <span className="text-sm flex-1">{item.label}</span>
-                <span
-                  className="badge"
-                  style={{
-                    background: "rgba(141,144,160,0.15)",
-                    color: "var(--text-3)",
-                    fontSize: "10px",
-                    padding: "1px 6px",
-                  }}
-                >
-                  Soon
-                </span>
-              </div>
-            );
+            return <DisabledNavItem key={item.label} item={item} />;
           }
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200"
               style={
                 active
@@ -146,27 +151,7 @@ export default function Sidebar() {
         style={{ borderTop: "1px solid var(--border)" }}
       >
         {FOOTER_ITEMS.map((item) => (
-          <div
-            key={item.label}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-default select-none"
-            style={{ color: "var(--text-3)" }}
-          >
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>
-              {item.icon}
-            </span>
-            <span className="text-sm flex-1">{item.label}</span>
-            <span
-              className="badge"
-              style={{
-                background: "rgba(141,144,160,0.15)",
-                color: "var(--text-3)",
-                fontSize: "10px",
-                padding: "1px 6px",
-              }}
-            >
-              Soon
-            </span>
-          </div>
+          <DisabledNavItem key={item.label} item={item} />
         ))}
       </div>
     </aside>

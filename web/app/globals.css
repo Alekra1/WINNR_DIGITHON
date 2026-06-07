@@ -36,6 +36,33 @@
   --color-background: var(--bg-base);
   --color-foreground: var(--text-1);
   --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* NovaSpark background tokens → bg-bg-base, bg-bg-card, etc. */
+  --color-bg-base:         var(--bg-base);
+  --color-bg-lowest:       var(--bg-lowest);
+  --color-bg-card:         var(--bg-card);
+  --color-bg-surface:      var(--bg-surface);
+  --color-bg-surface-high: var(--bg-surface-high);
+  --color-bg-input:        var(--bg-input);
+
+  /* Accent tokens → text-accent, bg-accent-container, etc. */
+  --color-accent:           var(--accent);
+  --color-accent-container: var(--accent-container);
+  --color-accent-dim:       var(--accent-dim);
+
+  /* Text tokens → text-text-1, text-text-2, text-text-3 */
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+
+  /* Border tokens → border-border, border-border-strong */
+  --color-border:        var(--border);
+  --color-border-strong: var(--border-strong);
+
+  /* Sentiment tokens → text-green, text-amber, text-red */
+  --color-green: var(--green);
+  --color-amber: var(--amber);
+  --color-red:   var(--red);
 }
 
 /* ── Base ───────────────────────────────────────────────────── */

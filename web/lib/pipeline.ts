@@ -2,7 +2,7 @@
 // store + Muninn memory. Used by /api/ingest (full run) and /api/meetings/[id]
 // (speaker-rename recompute).
 
-import { transcribeAudio } from "@/lib/assembly";
+import { transcribeAudio, deleteTranscript } from "@/lib/assembly";
 import { computeParticipation } from "@/lib/metrics";
 import { resolveName } from "@/lib/metrics";
 import { summarizeMeeting, generateTasks } from "@/lib/llm";
@@ -131,10 +131,18 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
       utterances,
       speakerMap: identifiedSpeakerMap,
       durationSec,
+      transcriptId,
     } = await transcribeAudio({
       buffer,
       expectedParticipants: initialMeeting.expectedParticipants,
     });
+
+    // Recording is now transcribed — remove it from AssemblyAI so no audio is
+    // retained on the third party. Fail-soft: never block the pipeline on this.
+    deleteTranscript(transcriptId).catch((e) =>
+      console.error(`[assemblyai] failed to delete transcript ${transcriptId}:`, e),
+    );
+
     const meeting = await getMeeting(id);
     if (!meeting) return;
 
@@ -172,9 +180,16 @@ export async function processMeeting(id: string, buffer: Buffer): Promise<void> 
       );
     }
   } catch (e) {
-    await updateMeeting(id, {
-      status: "error",
-      error: e instanceof Error ? e.message : String(e),
-    });
+    try {
+      await updateMeeting(id, {
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } catch (writeErr) {
+      console.error(
+        `[pipeline] Failed to write error status for meeting ${id}:`,
+        writeErr
+      );
+    }
   }
 }

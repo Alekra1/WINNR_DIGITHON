@@ -20,14 +20,6 @@ function getClient(): OpenAI {
   return _client;
 }
 
-function assertApiKey(): void {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error(
-      "OPENROUTER_API_KEY is not set. Add it to your environment variables."
-    );
-  }
-}
-
 const MEETING_TYPE_FOCUS: Record<MeetingType, string> = {
   standup:
     "Focus on: individual progress since last standup, blockers and impediments, and what each person will work on next.",
@@ -47,8 +39,6 @@ export async function summarizeMeeting(
   transcriptText: string,
   type: MeetingType
 ): Promise<string> {
-  assertApiKey();
-
   const systemPrompt = `You are a meeting summarizer. ${MEETING_TYPE_FOCUS[type]}
 
 Return a concise markdown summary of 120-200 words structured as:
@@ -85,8 +75,6 @@ export async function generateTasks(
   transcriptText: string,
   speakerNames: string[]
 ): Promise<Task[]> {
-  assertApiKey();
-
   const speakerList =
     speakerNames.length > 0 ? speakerNames.join(", ") : "unknown";
 
@@ -159,8 +147,6 @@ export async function chat(
   contextMemories: string[],
   scope: Scope
 ): Promise<string> {
-  assertApiKey();
-
   const memoryBlock =
     contextMemories.length > 0
       ? contextMemories.join("\n---\n")

@@ -6,6 +6,15 @@ import type {
 } from "assemblyai";
 import type { SpeakerMap, Utterance, Sentiment } from "@/lib/types";
 
+/** Construct an AssemblyAI client, throwing a clear error if the key is unset. */
+function getClient(): AssemblyAI {
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("ASSEMBLYAI_API_KEY environment variable is not set.");
+  }
+  return new AssemblyAI({ apiKey });
+}
+
 /** Normalize generic diarization labels while preserving identified speaker names.
  *  AssemblyAI diarization uses "A","B",...; Speaker Identification can return
  *  names/roles such as "Alice Johnson", which must not be collapsed to "A".
@@ -76,18 +85,14 @@ export async function transcribeAudio(input: {
   utterances: Utterance[];
   speakerMap: SpeakerMap;
   durationSec: number;
+  transcriptId: string;
 }> {
-  const apiKey = process.env.ASSEMBLYAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("ASSEMBLYAI_API_KEY environment variable is not set.");
-  }
-
   const audio = input.buffer ?? input.filePath;
   if (!audio) {
     throw new Error("transcribeAudio requires either buffer or filePath.");
   }
 
-  const client = new AssemblyAI({ apiKey });
+  const client = getClient();
   const expectedParticipants = Array.from(
     new Set(
       (input.expectedParticipants ?? [])
@@ -170,5 +175,15 @@ export async function transcribeAudio(input: {
     utterances,
     speakerMap,
     durationSec,
+    transcriptId: transcript.id,
   };
+}
+
+/**
+ * Permanently delete a transcript (and its associated audio) from AssemblyAI.
+ * Call after we've extracted everything we need, so no recording is retained
+ * on the third party. Fail-soft: caller should not let this break the pipeline.
+ */
+export async function deleteTranscript(id: string): Promise<void> {
+  await getClient().transcripts.delete(id);
 }

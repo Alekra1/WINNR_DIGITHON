@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { ChatMessage, Scope } from "@/lib/types";
 import WinnrLogo from "@/components/WinnrLogo";
 import Markdown from "@/components/Markdown";
@@ -120,8 +120,8 @@ function ThinkingBubble() {
   );
 }
 
-/* ── Chat messages type extended with error ── */
-type ExtendedMessage = ChatMessage | { role: "error"; content: string };
+/* ── Chat messages type extended with error and stable id ── */
+type ExtendedMessage = (ChatMessage | { role: "error"; content: string }) & { id: string };
 
 /* ── Page ──────────────────────────────────────────────────── */
 
@@ -130,19 +130,25 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [scope, setScope] = useState<Scope>("company");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  async function send() {
+  const send = useCallback(async () => {
     const question = input.trim();
     if (!question || loading) return;
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: question }]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: question }]);
     setLoading(true);
 
     try {
@@ -156,18 +162,23 @@ export default function ChatPage() {
         throw new Error(body?.error ?? `HTTP ${res.status}`);
       }
       const { answer } = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+      if (mountedRef.current) {
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: answer }]);
+      }
     } catch (err) {
-      // Append error as an error bubble, keep user message visible
-      setMessages((prev) => [
-        ...prev,
-        { role: "error", content: (err as Error).message },
-      ]);
+      if (mountedRef.current) {
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "error", content: (err as Error).message },
+        ]);
+      }
     } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      if (mountedRef.current) {
+        setLoading(false);
+        inputRef.current?.focus();
+      }
     }
-  }
+  }, [input, loading, scope]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -204,6 +215,8 @@ export default function ChatPage() {
 
         {/* Scope toggle */}
         <div
+          role="group"
+          aria-label="Memory scope"
           className="flex rounded-lg overflow-hidden"
           style={{ border: "1px solid var(--border)" }}
         >
@@ -211,6 +224,7 @@ export default function ChatPage() {
             <button
               key={s}
               onClick={() => setScope(s)}
+              aria-pressed={scope === s}
               className="px-3 py-1.5 text-xs font-medium transition-colors duration-200"
               style={
                 scope === s
@@ -284,10 +298,10 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map((msg, i) => {
-          if (msg.role === "user")      return <UserBubble      key={i} content={msg.content} />;
-          if (msg.role === "assistant") return <AssistantBubble key={i} content={msg.content} />;
-          if (msg.role === "error")     return <ErrorBubble     key={i} content={msg.content} />;
+        {messages.map((msg) => {
+          if (msg.role === "user")      return <UserBubble      key={msg.id} content={msg.content} />;
+          if (msg.role === "assistant") return <AssistantBubble key={msg.id} content={msg.content} />;
+          if (msg.role === "error")     return <ErrorBubble     key={msg.id} content={msg.content} />;
           return null;
         })}
 

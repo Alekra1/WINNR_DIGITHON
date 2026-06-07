@@ -73,15 +73,13 @@ export function computeParticipation(
 
   const totalMs = [...talkTimes.values()].reduce((a, b) => a + b, 0);
 
-  const results: Participation[] = order.map((speaker) => {
+  // Build raw (unrounded) results first so we can apply largest-remainder to talkPct.
+  const rawResults = order.map((speaker) => {
     const turns = groups.get(speaker)!;
     const speakerMs = talkTimes.get(speaker)!;
 
     const talkTimeSec = Math.round((speakerMs / 1000) * 10) / 10;
-    const talkPct =
-      totalMs === 0
-        ? 0
-        : Math.round((speakerMs / totalMs) * 100);
+    const rawPct = totalMs === 0 ? 0 : (speakerMs / totalMs) * 100;
 
     const words = turns.reduce(
       (sum, u) => sum + u.text.trim().split(/\s+/).filter(Boolean).length,
@@ -105,12 +103,36 @@ export function computeParticipation(
       speaker,
       employeeName: resolveName(speaker, speakerMap),
       talkTimeSec,
-      talkPct,
+      rawPct,
       turns: turns.length,
       words,
       avgSentimentScore,
     };
   });
+
+  // Largest-remainder method: ensure rounded talkPct values sum to exactly 100.
+  const hasTalkTime = totalMs > 0;
+  let remainingPct = hasTalkTime ? 100 : 0;
+  const floored = rawResults.map((r) => Math.floor(r.rawPct));
+  const remainders = rawResults.map((r, i) => ({
+    index: i,
+    remainder: r.rawPct - floored[i],
+  }));
+  remainders.sort((a, b) => b.remainder - a.remainder);
+  const toDistribute = remainingPct - floored.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < toDistribute; i++) {
+    floored[remainders[i].index]++;
+  }
+
+  const results: Participation[] = rawResults.map((r, i) => ({
+    speaker: r.speaker,
+    employeeName: r.employeeName,
+    talkTimeSec: r.talkTimeSec,
+    talkPct: floored[i],
+    turns: r.turns,
+    words: r.words,
+    avgSentimentScore: r.avgSentimentScore,
+  }));
 
   // Sort by talkTimeSec descending; stable sort preserves insertion order on ties.
   results.sort((a, b) => b.talkTimeSec - a.talkTimeSec);

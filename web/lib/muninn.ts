@@ -27,6 +27,13 @@ let sessionId: string | null = null;
 let initInFlight: Promise<string> | null = null;
 let callCounter = 1;
 
+/** Read a required env var, throwing a clear error if unset. */
+function getEnv(key: "MUNINN_URL" | "MUNINN_TOKEN"): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`${key} is not set`);
+  return value;
+}
+
 function nextId(): number {
   return ++callCounter;
 }
@@ -55,11 +62,8 @@ async function parseResponse(res: Response): Promise<unknown> {
 
 /** Perform the initialize handshake and cache the session id. */
 async function initialize(): Promise<string> {
-  const url = process.env.MUNINN_URL;
-  if (!url) throw new Error("MUNINN_URL is not set");
-
-  const token = process.env.MUNINN_TOKEN;
-  if (!token) throw new Error("MUNINN_TOKEN is not set");
+  const url = getEnv("MUNINN_URL");
+  const token = getEnv("MUNINN_TOKEN");
 
   const res = await fetch(url, {
     method: "POST",
@@ -109,22 +113,25 @@ async function ensureSession(): Promise<string> {
   return initInFlight;
 }
 
-/** Call a Muninn tool. Re-initializes session on session-related errors. */
-async function callTool(
-  toolName: string,
+/**
+ * Call a Muninn tool, handle session retry, parse the response, and return the
+ * text payload from `.result.content[0].text`. Throws on RPC-level errors.
+ */
+async function callMuninnTool(
+  name: string,
   args: Record<string, unknown>
-): Promise<unknown> {
-  const url = process.env.MUNINN_URL!;
-  const token = process.env.MUNINN_TOKEN!;
+): Promise<string> {
+  const url = getEnv("MUNINN_URL");
+  const token = getEnv("MUNINN_TOKEN");
 
   let sid = await ensureSession();
   const id = nextId();
 
-  const body = JSON.stringify({
+  const requestBody = JSON.stringify({
     jsonrpc: "2.0",
     id,
     method: "tools/call",
-    params: { name: toolName, arguments: args },
+    params: { name, arguments: args },
   });
 
   const doRequest = async (sessionIdToUse: string): Promise<Response> =>
@@ -136,7 +143,7 @@ async function callTool(
         Authorization: `Bearer ${token}`,
         "mcp-session-id": sessionIdToUse,
       },
-      body,
+      body: requestBody,
     });
 
   let res = await doRequest(sid);
@@ -149,17 +156,13 @@ async function callTool(
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
+    const errBody = await res.text().catch(() => "");
     throw new Error(
-      `Muninn tool call "${toolName}" failed: ${res.status} ${res.statusText} ${body.slice(0, 300)}`,
+      `Muninn tool call "${name}" failed: ${res.status} ${res.statusText} ${errBody.slice(0, 300)}`,
     );
   }
 
-  return parseResponse(res);
-}
-
-/** Extract the text payload from a tool-call JSON-RPC result. */
-function extractResultText(rpcResponse: unknown): string {
+  const rpcResponse = await parseResponse(res);
   const r = rpcResponse as {
     result?: { content?: { text?: string }[] };
     error?: { message?: string };
@@ -187,9 +190,8 @@ export async function rememberMemory(args: {
   if (args.summary !== undefined) toolArgs.summary = args.summary;
   if (args.entities !== undefined) toolArgs.entities = args.entities;
 
-  const result = await callTool("muninn_remember", toolArgs);
   // We don't need the return value — just ensure no RPC-level error.
-  extractResultText(result);
+  await callMuninnTool("muninn_remember", toolArgs);
 }
 
 /**
@@ -208,8 +210,7 @@ export async function recallMemories(
     };
     if (opts?.mode !== undefined) toolArgs.mode = opts.mode;
 
-    const result = await callTool("muninn_recall", toolArgs);
-    const text = extractResultText(result);
+    const text = await callMuninnTool("muninn_recall", toolArgs);
 
     if (!text) return [];
 
@@ -229,11 +230,11 @@ export async function recallMemories(
         if (item && typeof item === "object") {
           const m = item as Record<string, unknown>;
           // Prefer summary, fall back to content, then any string field.
-          const text =
+          const snippet =
             (typeof m.summary === "string" && m.summary) ||
             (typeof m.content === "string" && m.content) ||
             Object.values(m).find((v) => typeof v === "string") as string | undefined;
-          return text ? [text] : [];
+          return snippet ? [snippet] : [];
         }
         return [];
       });

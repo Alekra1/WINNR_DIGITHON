@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Task } from "@/lib/types";
 
 interface Props {
@@ -11,6 +11,11 @@ interface Props {
 
 export default function TaskList({ tasks, onSave, saving = false }: Props) {
   const [local, setLocal] = useState<Task[]>(tasks);
+
+  // Keep local state in sync when the parent re-fetches/polls tasks
+  useEffect(() => {
+    setLocal(tasks);
+  }, [tasks]);
 
   function update(id: string, patch: Partial<Task>) {
     setLocal((prev) =>
@@ -52,6 +57,7 @@ export default function TaskList({ tasks, onSave, saving = false }: Props) {
                 type="text"
                 value={task.text}
                 onChange={(e) => update(task.id, { text: e.target.value })}
+                aria-label="Task description"
                 className="flex-1 bg-transparent text-sm outline-none transition-colors"
                 style={{
                   color:          task.done ? "var(--text-3)" : "var(--text-1)",
@@ -65,6 +71,7 @@ export default function TaskList({ tasks, onSave, saving = false }: Props) {
                 value={task.assignee}
                 onChange={(e) => update(task.id, { assignee: e.target.value })}
                 placeholder="Assignee"
+                aria-label="Assignee"
                 className="w-28 shrink-0 bg-transparent text-xs text-right outline-none"
                 style={{ color: "var(--text-2)" }}
               />
