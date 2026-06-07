@@ -2,17 +2,17 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams } from "next/navigation";
-import dynamic from "next/dynamic";
+import Link from "next/link";
 import type { Task, SpeakerMap } from "@/lib/types";
-import { StatusBadge, TypeBadge, SentimentDot } from "@/components/Badge";
-import TaskList from "@/components/TaskList";
+import { StatusBadge, TypeBadge } from "@/components/Badge";
 import Markdown from "@/components/Markdown";
+import AskAboutMeeting from "@/components/AskAboutMeeting";
+import TalkTimePanel from "@/components/TalkTimePanel";
+import QuickStats from "@/components/QuickStats";
+import Transcript from "@/components/Transcript";
+import PeopleBoard from "@/components/PeopleBoard";
 import { useMeeting } from "@/hooks/useMeeting";
 import { formatDuration, formatDate } from "@/lib/utils";
-
-const TalkTimeChart = dynamic(() => import("@/components/TalkTimeChart"), {
-  ssr: false,
-});
 
 function SectionCard({
   title,
@@ -50,7 +50,6 @@ export default function MeetingDetail() {
   // ── Speaker map draft (B2 fix) ─────────────────────────────────────────────
   // Initialised once from the first "ready" meeting; never overwritten by polls.
   const [speakerMap, setSpeakerMap] = useState<SpeakerMap>({});
-  const [excludedSpeakers, setExcludedSpeakers] = useState<string[]>([]);
   const speakerMapInitialisedRef = useRef(false);
 
   useEffect(() => {
@@ -61,15 +60,8 @@ export default function MeetingDetail() {
     ) {
       speakerMapInitialisedRef.current = true;
       setSpeakerMap(meeting.speakerMap ?? {});
-      setExcludedSpeakers(meeting.excludedSpeakers ?? []);
     }
   }, [meeting]);
-
-  function toggleExcluded(label: string) {
-    setExcludedSpeakers((prev) =>
-      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
-    );
-  }
 
   // ── Speaker-map save state ─────────────────────────────────────────────────
   const [savingMap, setSavingMap] = useState(false);
@@ -90,11 +82,7 @@ export default function MeetingDetail() {
 
   // ── PATCH helper ──────────────────────────────────────────────────────────
   const handlePatch = useCallback(
-    async (body: {
-      speakerMap?: SpeakerMap;
-      tasks?: Task[];
-      excludedSpeakers?: string[];
-    }) => {
+    async (body: { speakerMap?: SpeakerMap; tasks?: Task[] }) => {
       const res = await fetch(`/api/meetings/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -106,12 +94,12 @@ export default function MeetingDetail() {
     [id]
   );
 
-  // ── Save speaker map (B3 fix: surfaces error inline) ──────────────────────
+  // ── Save speaker map ───────────────────────────────────────────────────────
   async function saveSpeakerMap() {
     setSavingMap(true);
     setMapSaveError(null);
     try {
-      const updated = await handlePatch({ speakerMap, excludedSpeakers });
+      const updated = await handlePatch({ speakerMap });
       setMeeting(updated);
       setMapSaved(true);
       setTimeout(() => setMapSaved(false), 2000);
@@ -122,7 +110,7 @@ export default function MeetingDetail() {
     }
   }
 
-  // ── Save tasks (B3 fix: surfaces error inline) ─────────────────────────────
+  // ── Save tasks (reassign / done-toggle) ────────────────────────────────────
   async function saveTasks(tasks: Task[]) {
     setSavingTasks(true);
     setTaskSaveError(null);
@@ -162,23 +150,40 @@ export default function MeetingDetail() {
     );
   }
 
+  const isReady = meeting.status !== "processing" && meeting.status !== "error";
+
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-5">
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-5">
+      {/* ── Back link ── */}
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-[var(--text-1)]"
+        style={{ color: "var(--text-3)" }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+          arrow_back
+        </span>
+        All meetings
+      </Link>
+
       {/* ── (a) Header ── */}
       <div className="card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2 flex-1 min-w-0">
             <h1
-              className="text-xl font-bold leading-snug"
+              className="text-2xl font-bold leading-snug"
               style={{ color: "var(--text-1)" }}
             >
               {meeting.title}
             </h1>
-            {/* Status badges only — no redundant inline Spinner here (B1 fix).
-                The full processing card below is the single processing indicator. */}
             <div className="flex flex-wrap items-center gap-2">
               <TypeBadge type={meeting.type} />
               <StatusBadge status={meeting.status} />
+              {meeting.project && (
+                <span className="text-xs" style={{ color: "var(--text-3)" }}>
+                  · {meeting.project}
+                </span>
+              )}
             </div>
           </div>
           <div className="text-right space-y-1 shrink-0">
@@ -235,230 +240,62 @@ export default function MeetingDetail() {
         </div>
       )}
 
-      {/* ── Ready sections ── */}
-      {meeting.status !== "processing" && meeting.status !== "error" && (
+      {/* ── Ready: two-column workspace + full-width people board ── */}
+      {isReady && (
         <>
-          {/* (b) Talk-time chart */}
-          <SectionCard title="Talk time" icon="record_voice_over">
-            <TalkTimeChart participation={meeting.participation} />
-          </SectionCard>
+          <div className="grid gap-5 items-start lg:grid-cols-[minmax(0,1fr)_340px]">
+            {/* Main column */}
+            <div className="space-y-5 min-w-0">
+              <AskAboutMeeting title={meeting.title} />
 
-          {/* (c) Speaker naming */}
-          {diarizationLabels.length > 0 && (
-            <SectionCard title="Name speakers" icon="badge">
-              <p className="text-xs" style={{ color: "var(--text-3)" }}>
-                Map diarization labels to real names. Mark a label as a bot / non-participant
-                to drop it from charts and snapshots. Changes apply on save.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {diarizationLabels.map((label) => {
-                  const excluded = excludedSpeakers.includes(label);
-                  return (
-                    <div
-                      key={label}
-                      className="flex items-center gap-2"
-                      style={excluded ? { opacity: 0.55 } : undefined}
-                    >
-                      <span
-                        className="shrink-0 w-14 text-xs font-mono rounded-lg px-2 py-1 text-center"
-                        style={{
-                          background: "var(--bg-surface)",
-                          color: "var(--accent)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <input
-                        type="text"
-                        aria-label={`Name for speaker ${label}`}
-                        value={speakerMap[label] ?? ""}
-                        placeholder={excluded ? "Bot / excluded" : `Speaker ${label}`}
-                        disabled={excluded}
-                        onChange={(e) =>
-                          setSpeakerMap((prev) => ({ ...prev, [label]: e.target.value }))
-                        }
-                        className="input flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleExcluded(label)}
-                        aria-pressed={excluded}
-                        title={excluded ? "Include as participant" : "Mark as bot / non-participant"}
-                        className="shrink-0 flex items-center justify-center rounded-lg transition-colors"
-                        style={{
-                          width: 34,
-                          height: 34,
-                          border: "1px solid var(--border)",
-                          background: excluded ? "var(--accent-container)" : "var(--bg-surface)",
-                          color: excluded ? "var(--accent)" : "var(--text-3)",
-                        }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                          {excluded ? "smart_toy" : "person_off"}
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={saveSpeakerMap}
-                  disabled={savingMap}
-                  className="btn-primary text-sm"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                    save
-                  </span>
-                  {savingMap ? "Saving…" : "Save names"}
-                </button>
-                {mapSaved && (
-                  <span
-                    className="flex items-center gap-1 text-xs"
-                    style={{ color: "var(--green)" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                      check_circle
-                    </span>
-                    Saved!
-                  </span>
-                )}
-                {/* B3 fix: inline save error for speaker map */}
-                {mapSaveError && (
-                  <span className="text-xs" style={{ color: "var(--red)" }}>
-                    {mapSaveError}
-                  </span>
-                )}
-              </div>
-            </SectionCard>
-          )}
+              {meeting.summary && (
+                <SectionCard title="Summary" icon="summarize">
+                  <Markdown text={meeting.summary} />
+                </SectionCard>
+              )}
 
-          {/* (d) Summary */}
-          {meeting.summary && (
-            <SectionCard title="Summary" icon="summarize">
-              <div className="text-sm leading-relaxed" style={{ color: "var(--text-2)" }}>
-                <Markdown text={meeting.summary} />
-              </div>
-            </SectionCard>
-          )}
+              <Transcript
+                utterances={meeting.utterances}
+                transcriptText={meeting.transcriptText}
+                speakerMap={speakerMap}
+              />
+            </div>
 
-          {/* (e) Tasks */}
-          <SectionCard title="Action items" icon="task_alt">
-            <TaskList tasks={meeting.tasks} onSave={saveTasks} saving={savingTasks} />
-            {/* B3 fix: inline save error for tasks */}
-            {taskSaveError && (
-              <p className="text-xs mt-2" style={{ color: "var(--red)" }}>
-                {taskSaveError}
-              </p>
-            )}
-          </SectionCard>
+            {/* Sticky rail */}
+            <div className="space-y-5 lg:sticky lg:top-6 self-start">
+              <TalkTimePanel
+                participation={meeting.participation}
+                labels={diarizationLabels}
+                speakerMap={speakerMap}
+                onChangeName={(label, value) =>
+                  setSpeakerMap((prev) => ({ ...prev, [label]: value }))
+                }
+                onSave={saveSpeakerMap}
+                saving={savingMap}
+                saved={mapSaved}
+                error={mapSaveError}
+              />
+              <QuickStats meeting={meeting} />
+            </div>
+          </div>
 
-          {/* (f) Per-employee snapshots */}
-          {meeting.snapshots && meeting.snapshots.length > 0 && (
-            <SectionCard title="Employee snapshots" icon="group">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {meeting.snapshots.map((snap) => (
-                  <div
-                    key={snap.employeeName}
-                    className="rounded-xl p-4 space-y-3"
-                    style={{
-                      background: "var(--bg-surface)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="material-symbols-outlined"
-                          style={{ fontSize: 18, color: "var(--accent)" }}
-                        >
-                          account_circle
-                        </span>
-                        <span
-                          className="text-sm font-semibold"
-                          style={{ color: "var(--text-1)" }}
-                        >
-                          {snap.employeeName}
-                        </span>
-                      </div>
-                      <SentimentDot score={snap.avgSentimentScore} />
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs">
-                      <span style={{ color: "var(--text-3)" }}>
-                        Talk:&nbsp;
-                        <span style={{ color: "var(--text-2)" }}>
-                          {Math.round(snap.talkPct)}%
-                        </span>
-                      </span>
-                      <span style={{ color: "var(--text-3)" }}>
-                        Tasks:&nbsp;
-                        <span style={{ color: "var(--text-2)" }}>{snap.tasks.length}</span>
-                      </span>
-                    </div>
-
-                    {snap.tasks.length > 0 && (
-                      <ul className="space-y-1.5">
-                        {snap.tasks.map((t) => (
-                          <li
-                            key={t.id}
-                            className="flex items-start gap-2 text-xs"
-                            style={{ color: "var(--text-2)" }}
-                          >
-                            <span
-                              className="mt-0.5 h-1.5 w-1.5 rounded-full shrink-0"
-                              style={{
-                                background: t.done
-                                  ? "var(--green)"
-                                  : "var(--accent-container)",
-                                marginTop: "5px",
-                              }}
-                            />
-                            <span
-                              style={
-                                t.done
-                                  ? {
-                                      textDecoration: "line-through",
-                                      color: "var(--text-3)",
-                                    }
-                                  : {}
-                              }
-                            >
-                              {t.text}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {snap.recommendation && (
-                      <p
-                        className="text-xs italic border-t pt-3 leading-relaxed"
-                        style={{
-                          color: "var(--text-3)",
-                          borderColor: "var(--border)",
-                        }}
-                      >
-                        {snap.recommendation}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
+          <PeopleBoard
+            snapshots={meeting.snapshots}
+            tasks={meeting.tasks}
+            onSave={saveTasks}
+            saving={savingTasks}
+            error={taskSaveError}
+          />
         </>
       )}
     </div>
   );
 }
 
-function Spinner({ small }: { small?: boolean }) {
-  const size = small ? "h-4 w-4 border-2" : "h-8 w-8 border-2";
+function Spinner() {
   return (
     <div
-      className={`${size} rounded-full animate-spin inline-block`}
+      className="h-8 w-8 border-2 rounded-full animate-spin inline-block"
       style={{
         borderColor: "var(--accent-container)",
         borderTopColor: "transparent",

@@ -3,13 +3,34 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Meeting } from "@/lib/types";
-import { StatusBadge, TypeBadge } from "@/components/Badge";
+import { StatusBadge, TypeBadge, SentimentDot } from "@/components/Badge";
 import { formatDate, formatDuration } from "@/lib/utils";
 
 function topTalker(meeting: Meeting): string | null {
   if (!meeting.participation || meeting.participation.length === 0) return null;
   const top = [...meeting.participation].sort((a, b) => b.talkPct - a.talkPct)[0];
   return `${top.employeeName} (${Math.round(top.talkPct)}%)`;
+}
+
+// First sentence of the summary, stripped of the markdown the LLM emits.
+function summaryPreview(summary: string): string | null {
+  if (!summary) return null;
+  const plain = summary
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_`~]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return null;
+  const sentence = plain.split(/(?<=[.!?])\s/)[0];
+  return sentence.length > 150 ? `${sentence.slice(0, 147)}…` : sentence;
+}
+
+function avgSentiment(meeting: Meeting): number | null {
+  const scores = (meeting.participation ?? [])
+    .map((p) => p.avgSentimentScore)
+    .filter((s) => typeof s === "number");
+  if (scores.length === 0) return null;
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
 
 interface Props {
@@ -31,6 +52,9 @@ export default function MeetingCard({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const leader = topTalker(m);
+  const preview = m.status === "ready" ? summaryPreview(m.summary) : null;
+  const sentiment = avgSentiment(m);
+  const taskCount = m.tasks?.length ?? 0;
 
   function act(fn: () => void) {
     return (e: React.MouseEvent) => {
@@ -70,16 +94,52 @@ export default function MeetingCard({
           )}
         </div>
 
-        {/* Top talker */}
-        {leader && (
+        {/* Summary preview */}
+        {preview && (
+          <p
+            className="text-xs leading-relaxed line-clamp-2"
+            style={{ color: "var(--text-3)" }}
+          >
+            {preview}
+          </p>
+        )}
+
+        {/* Footer: top talker + task / sentiment stats */}
+        {(leader || taskCount > 0 || sentiment !== null) && (
           <div
-            className="flex items-center gap-1.5 text-xs mt-auto pt-2"
+            className="flex items-center justify-between gap-2 text-xs mt-auto pt-2"
             style={{ color: "var(--text-2)", borderTop: "1px solid var(--border)" }}
           >
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>
-              person
+            {leader ? (
+              <span className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="material-symbols-outlined shrink-0"
+                  style={{ fontSize: 14 }}
+                >
+                  person
+                </span>
+                <span className="truncate">{leader}</span>
+              </span>
+            ) : (
+              <span />
+            )}
+            <span className="flex items-center gap-3 shrink-0">
+              {taskCount > 0 && (
+                <span
+                  className="flex items-center gap-1"
+                  style={{ color: "var(--text-3)" }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 14 }}
+                  >
+                    task_alt
+                  </span>
+                  {taskCount}
+                </span>
+              )}
+              {sentiment !== null && <SentimentDot score={sentiment} />}
             </span>
-            {leader}
           </div>
         )}
       </Link>

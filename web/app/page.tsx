@@ -147,7 +147,7 @@ export default function MeetingsDashboard() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
+    <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
       {/* ── Page header ── */}
       <div>
         <h1
