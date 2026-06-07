@@ -38,6 +38,7 @@ export async function PATCH(
       type?: MeetingType;
       project?: string;
       department?: string;
+      excludedSpeakers?: string[];
     };
 
     const patch: Partial<Meeting> = {};
@@ -49,12 +50,17 @@ export async function PATCH(
     if (typeof body.project === "string") patch.project = body.project.trim();
     if (typeof body.department === "string") patch.department = body.department.trim();
 
-    // Renaming speakers: recompute participation labels + snapshots.
-    if (body.speakerMap) {
-      patch.speakerMap = body.speakerMap;
+    if (Array.isArray(body.excludedSpeakers)) patch.excludedSpeakers = body.excludedSpeakers;
+
+    // Renaming speakers or changing exclusions: recompute participation + snapshots.
+    if (body.speakerMap || Array.isArray(body.excludedSpeakers)) {
+      const speakerMap = body.speakerMap ?? existing.speakerMap;
+      if (body.speakerMap) patch.speakerMap = body.speakerMap;
+      const excluded = patch.excludedSpeakers ?? existing.excludedSpeakers;
       const participation = computeParticipation(
         existing.utterances,
-        body.speakerMap,
+        speakerMap,
+        excluded,
       );
       patch.participation = participation;
       patch.snapshots = buildSnapshots(

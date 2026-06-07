@@ -76,6 +76,7 @@ export interface Meeting {
   error?: string;
   archived?: boolean; // soft-delete: hidden from default list, recoverable
   memoryIds?: string[]; // Muninn memory ids written for this meeting (for forget-on-delete)
+  excludedSpeakers?: string[]; // diarization labels marked as bot / non-participant — dropped from metrics
 }
 
 export interface ChatMessage {

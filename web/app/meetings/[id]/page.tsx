@@ -50,6 +50,7 @@ export default function MeetingDetail() {
   // ── Speaker map draft (B2 fix) ─────────────────────────────────────────────
   // Initialised once from the first "ready" meeting; never overwritten by polls.
   const [speakerMap, setSpeakerMap] = useState<SpeakerMap>({});
+  const [excludedSpeakers, setExcludedSpeakers] = useState<string[]>([]);
   const speakerMapInitialisedRef = useRef(false);
 
   useEffect(() => {
@@ -60,8 +61,15 @@ export default function MeetingDetail() {
     ) {
       speakerMapInitialisedRef.current = true;
       setSpeakerMap(meeting.speakerMap ?? {});
+      setExcludedSpeakers(meeting.excludedSpeakers ?? []);
     }
   }, [meeting]);
+
+  function toggleExcluded(label: string) {
+    setExcludedSpeakers((prev) =>
+      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
+    );
+  }
 
   // ── Speaker-map save state ─────────────────────────────────────────────────
   const [savingMap, setSavingMap] = useState(false);
@@ -82,7 +90,11 @@ export default function MeetingDetail() {
 
   // ── PATCH helper ──────────────────────────────────────────────────────────
   const handlePatch = useCallback(
-    async (body: { speakerMap?: SpeakerMap; tasks?: Task[] }) => {
+    async (body: {
+      speakerMap?: SpeakerMap;
+      tasks?: Task[];
+      excludedSpeakers?: string[];
+    }) => {
       const res = await fetch(`/api/meetings/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -99,7 +111,7 @@ export default function MeetingDetail() {
     setSavingMap(true);
     setMapSaveError(null);
     try {
-      const updated = await handlePatch({ speakerMap });
+      const updated = await handlePatch({ speakerMap, excludedSpeakers });
       setMeeting(updated);
       setMapSaved(true);
       setTimeout(() => setMapSaved(false), 2000);
@@ -235,33 +247,60 @@ export default function MeetingDetail() {
           {diarizationLabels.length > 0 && (
             <SectionCard title="Name speakers" icon="badge">
               <p className="text-xs" style={{ color: "var(--text-3)" }}>
-                Map diarization labels to real names. Changes are reflected in charts and snapshots.
+                Map diarization labels to real names. Mark a label as a bot / non-participant
+                to drop it from charts and snapshots. Changes apply on save.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {diarizationLabels.map((label) => (
-                  <div key={label} className="flex items-center gap-3">
-                    <span
-                      className="shrink-0 w-16 text-xs font-mono rounded-lg px-2 py-1 text-center"
-                      style={{
-                        background: "var(--bg-surface)",
-                        color: "var(--accent)",
-                        border: "1px solid var(--border)",
-                      }}
+                {diarizationLabels.map((label) => {
+                  const excluded = excludedSpeakers.includes(label);
+                  return (
+                    <div
+                      key={label}
+                      className="flex items-center gap-2"
+                      style={excluded ? { opacity: 0.55 } : undefined}
                     >
-                      {label}
-                    </span>
-                    <input
-                      type="text"
-                      aria-label={`Name for speaker ${label}`}
-                      value={speakerMap[label] ?? ""}
-                      placeholder={`Speaker ${label}`}
-                      onChange={(e) =>
-                        setSpeakerMap((prev) => ({ ...prev, [label]: e.target.value }))
-                      }
-                      className="input flex-1"
-                    />
-                  </div>
-                ))}
+                      <span
+                        className="shrink-0 w-14 text-xs font-mono rounded-lg px-2 py-1 text-center"
+                        style={{
+                          background: "var(--bg-surface)",
+                          color: "var(--accent)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <input
+                        type="text"
+                        aria-label={`Name for speaker ${label}`}
+                        value={speakerMap[label] ?? ""}
+                        placeholder={excluded ? "Bot / excluded" : `Speaker ${label}`}
+                        disabled={excluded}
+                        onChange={(e) =>
+                          setSpeakerMap((prev) => ({ ...prev, [label]: e.target.value }))
+                        }
+                        className="input flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleExcluded(label)}
+                        aria-pressed={excluded}
+                        title={excluded ? "Include as participant" : "Mark as bot / non-participant"}
+                        className="shrink-0 flex items-center justify-center rounded-lg transition-colors"
+                        style={{
+                          width: 34,
+                          height: 34,
+                          border: "1px solid var(--border)",
+                          background: excluded ? "var(--accent-container)" : "var(--bg-surface)",
+                          color: excluded ? "var(--accent)" : "var(--text-3)",
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                          {excluded ? "smart_toy" : "person_off"}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex items-center gap-3">
                 <button
