@@ -21,7 +21,10 @@ export default function TaskList({ tasks, onSave, saving = false }: Props) {
   return (
     <div className="space-y-3">
       {local.length === 0 ? (
-        <p className="text-sm py-4 text-center" style={{ color: "var(--text-3)" }}>
+        <p
+          className="text-sm py-6 text-center"
+          style={{ color: "var(--text-3)" }}
+        >
           No tasks extracted from this meeting.
         </p>
       ) : (
@@ -29,25 +32,29 @@ export default function TaskList({ tasks, onSave, saving = false }: Props) {
           {local.map((task) => (
             <li
               key={task.id}
-              className="flex items-start gap-3 rounded-lg p-3"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+              className="flex items-start gap-3 rounded-xl px-4 py-3 transition-colors"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+              }}
             >
-              {/* Done checkbox */}
+              {/* Checkbox */}
               <input
                 type="checkbox"
                 checked={task.done}
                 onChange={(e) => update(task.id, { done: e.target.checked })}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[var(--accent)] cursor-pointer"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded cursor-pointer"
+                style={{ accentColor: "var(--accent-container)" }}
               />
 
-              {/* Text */}
+              {/* Task text */}
               <input
                 type="text"
                 value={task.text}
                 onChange={(e) => update(task.id, { text: e.target.value })}
-                className="flex-1 bg-transparent text-sm outline-none"
+                className="flex-1 bg-transparent text-sm outline-none transition-colors"
                 style={{
-                  color: task.done ? "var(--text-3)" : "var(--text-1)",
+                  color:          task.done ? "var(--text-3)" : "var(--text-1)",
                   textDecoration: task.done ? "line-through" : "none",
                 }}
               />
@@ -72,6 +79,7 @@ export default function TaskList({ tasks, onSave, saving = false }: Props) {
           disabled={saving}
           className="btn-primary text-sm"
         >
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span>
           {saving ? "Saving…" : "Save tasks"}
         </button>
       )}

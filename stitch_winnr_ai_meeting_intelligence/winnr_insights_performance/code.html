@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>WINNR - Insights &amp; Performance</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed-dim": "#b4c5ff",
+                    "gray-100": "#F3F4F6",
+                    "tertiary": "#c4c7c9",
+                    "surface-variant": "#2e3545",
+                    "on-secondary-fixed": "#131b2e",
+                    "error-container": "#93000a",
+                    "error": "#ffb4ab",
+                    "on-primary-fixed-variant": "#003ea8",
+                    "inverse-on-surface": "#293040",
+                    "surface-container-high": "#232a3a",
+                    "primary": "#b4c5ff",
+                    "outline": "#8d90a0",
+                    "surface-bright": "#323949",
+                    "surface-container": "#191f2f",
+                    "secondary": "#bec6e0",
+                    "on-surface-variant": "#c3c6d7",
+                    "on-surface": "#dce2f7",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "on-tertiary-fixed": "#191c1e",
+                    "primary-fixed": "#dbe1ff",
+                    "inverse-surface": "#dce2f7",
+                    "on-error": "#690005",
+                    "secondary-container": "#3f465c",
+                    "secondary-fixed": "#dae2fd",
+                    "secondary-fixed-dim": "#bec6e0",
+                    "gray-600": "#4B5563",
+                    "on-primary": "#002a78",
+                    "surface-container-highest": "#2e3545",
+                    "on-secondary": "#283044",
+                    "surface-dim": "#0c1322",
+                    "spark-green": "#22C55E",
+                    "spark-orange": "#F97316",
+                    "on-error-container": "#ffdad6",
+                    "on-tertiary": "#2d3133",
+                    "background": "#0c1322",
+                    "outline-variant": "#434655",
+                    "spark-red": "#EF4444",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "on-primary-fixed": "#00174b",
+                    "on-tertiary-container": "#eff1f3",
+                    "on-background": "#dce2f7",
+                    "on-primary-container": "#eeefff",
+                    "tertiary-container": "#6b6e70",
+                    "tertiary-fixed": "#e0e3e5",
+                    "surface-container-low": "#141b2b",
+                    "on-secondary-fixed-variant": "#3f465c",
+                    "on-secondary-container": "#adb4ce",
+                    "primary-container": "#2563eb",
+                    "inverse-primary": "#0053db",
+                    "surface-tint": "#b4c5ff",
+                    "surface-container-lowest": "#070e1d",
+                    "gray-300": "#D1D5DB",
+                    "surface": "#0c1322"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "space-24": "96px",
+                    "space-16": "64px",
+                    "max-width": "1280px",
+                    "space-8": "32px",
+                    "space-4": "16px",
+                    "gutter": "24px",
+                    "space-2": "8px",
+                    "space-12": "48px",
+                    "space-3": "12px",
+                    "space-6": "24px",
+                    "space-1": "4px"
+            },
+            "fontFamily": {
+                    "body-sm": ["Inter"],
+                    "h1-mobile": ["Inter"],
+                    "caption": ["Inter"],
+                    "h1": ["Inter"],
+                    "display": ["Inter"],
+                    "h4": ["Inter"],
+                    "display-mobile": ["Inter"],
+                    "body": ["Inter"],
+                    "h3": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "h2": ["Inter"]
+            },
+            "fontSize": {
+                    "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "h1-mobile": ["30px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "caption": ["12px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                    "h1": ["36px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "h4": ["18px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "display-mobile": ["36px", {"lineHeight": "1.1", "fontWeight": "700"}],
+                    "body": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "h3": ["22px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "h2": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(25, 31, 47, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(67, 70, 85, 0.5);
+        }
+        .chart-bar {
+            transition: height 0.8s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body text-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar Component -->
+<nav class="hidden md:flex flex-col bg-surface-container-low w-[240px] h-screen fixed left-0 top-0 border-r border-outline-variant shadow-md z-50">
+<div class="flex flex-col h-full py-space-6">
+<!-- Header -->
+<div class="px-space-6 mb-space-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container font-h3 text-h3 font-bold">
+                        W
+                    </div>
+<div>
+<h1 class="font-h2 text-h2 font-bold text-on-surface">WINNR</h1>
+<p class="font-caption text-caption text-on-surface-variant">AI Intelligence</p>
+</div>
+</div>
+</div>
+<!-- Main Tabs -->
+<div class="flex-1 flex flex-col gap-1">
+<!-- Inactive Tab -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                    Dashboard
+                </a>
+<!-- Active Tab: Insights -->
+<a class="flex items-center gap-3 px-4 py-3 border-l-4 border-primary bg-secondary-container text-on-secondary-container font-body-sm text-body-sm transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+                    Insights
+                </a>
+<!-- Inactive Tabs -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">psychology</span>
+                    Muninn Vault
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">task_alt</span>
+                    Task Tracker
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">video_library</span>
+                    Recordings
+                </a>
+</div>
+<!-- CTA -->
+<div class="px-4 mt-auto mb-6">
+<button class="w-full bg-primary-container text-on-primary-container hover:bg-inverse-primary transition-colors py-2 rounded-lg font-body-sm text-body-sm font-semibold flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add</span>
+                    New Meeting
+                </button>
+</div>
+<!-- Footer Tabs -->
+<div class="flex flex-col gap-1 border-t border-outline-variant pt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-sm text-body-sm" href="#">
+<span class="material-symbols-outlined">help</span>
+                    Support
+                </a>
+</div>
+</div>
+</nav>
+<!-- TopAppBar Component -->
+<header class="hidden md:flex justify-between items-center h-16 px-space-6 ml-[240px] w-[calc(100%-240px)] bg-surface/80 backdrop-blur-md border-b border-outline-variant shadow-sm docked full-width top-0 sticky z-40 text-primary font-body text-body">
+<!-- Search -->
+<div class="flex-1 max-w-md">
+<div class="relative focus-within:ring-2 focus-within:ring-primary rounded-lg transition-all duration-200">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container border border-outline-variant text-on-surface rounded-lg pl-10 pr-4 py-2 text-body-sm focus:outline-none focus:border-primary" placeholder="Search insights, recordings..." type="text"/>
+</div>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-spark-orange rounded-full"></span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">history_edu</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors pl-2 border-l border-outline-variant">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="md:ml-[240px] p-space-4 md:p-space-8 max-w-max-width mx-auto">
+<!-- Page Header -->
+<div class="mb-space-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h2 class="font-h1 text-h1 font-bold text-on-surface mb-1">Insights &amp; Performance</h2>
+<p class="font-body text-body text-on-surface-variant">Analyze your communication dynamics and team impact over the last 30 days.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container border border-outline-variant rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-caption text-caption">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+                    Last 30 Days
+                </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container border border-outline-variant rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-caption text-caption">
+<span class="material-symbols-outlined text-sm">download</span>
+                    Export
+                </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- High Level Metrics (Top Row) -->
+<div class="md:col-span-4 bg-surface rounded-xl border border-outline-variant p-6 shadow-md hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-primary/20 transition-all"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<h3 class="font-h4 text-h4 text-on-surface-variant">Participation Quality</h3>
+<span class="material-symbols-outlined text-primary">model_training</span>
+</div>
+<div class="flex items-end gap-3 relative z-10">
+<span class="font-display text-display text-on-surface">86</span>
+<span class="font-caption text-caption text-spark-green flex items-center mb-2 bg-spark-green/10 px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span> 4.2%
+                    </span>
+</div>
+<p class="font-caption text-caption text-outline mt-2 relative z-10">vs previous period</p>
+</div>
+<div class="md:col-span-4 bg-surface rounded-xl border border-outline-variant p-6 shadow-md hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<h3 class="font-h4 text-h4 text-on-surface-variant">Team Average Diff</h3>
+<span class="material-symbols-outlined text-secondary">groups</span>
+</div>
+<div class="flex items-end gap-3">
+<span class="font-display text-display text-on-surface">+12</span>
+<span class="font-body text-body text-on-surface-variant mb-2">pts</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full mt-4 overflow-hidden">
+<div class="bg-primary-container h-full rounded-full w-[70%] relative">
+<div class="absolute right-0 top-0 bottom-0 w-1 bg-on-primary-container"></div>
+</div>
+</div>
+</div>
+<div class="md:col-span-4 bg-surface rounded-xl border border-outline-variant p-6 shadow-md hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<h3 class="font-h4 text-h4 text-on-surface-variant">Overall Impact</h3>
+<span class="material-symbols-outlined text-spark-orange">bolt</span>
+</div>
+<div class="flex items-end gap-3">
+<span class="font-display text-display text-on-surface">High</span>
+</div>
+<p class="font-caption text-caption text-on-surface-variant mt-2 leading-relaxed">Your interventions consistently correlate with positive sentiment shifts in recordings.</p>
+</div>
+<!-- AI Coach Recommendations (Middle Row) -->
+<div class="md:col-span-12 mt-4 mb-2">
+<h3 class="font-h3 text-h3 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">smart_toy</span>
+                    AI Coach Recommendations
+                </h3>
+</div>
+<div class="md:col-span-7 glass-panel rounded-xl p-6 shadow-lg relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
+<div class="flex justify-between items-start mb-4">
+<div>
+<h4 class="font-h4 text-h4 text-on-surface mb-1">Interrogation Quality</h4>
+<p class="font-caption text-caption text-on-surface-variant">Analysis of question phrasing and open-endedness.</p>
+</div>
+<span class="bg-primary-container/20 text-primary-container px-3 py-1 rounded-full font-caption text-caption font-semibold">Priority</span>
+</div>
+<div class="bg-surface-container rounded-lg p-4 mb-4 border border-outline-variant/50">
+<p class="font-body-sm text-body-sm text-on-surface italic">"Consider reducing 'Yes/No' constraints in your discovery phases. Open questions yield 40% more insight depth."</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface border border-outline-variant text-on-surface hover:bg-surface-container-high px-4 py-2 rounded-lg font-caption text-caption transition-colors">Review Examples</button>
+<button class="bg-surface border border-outline-variant text-on-surface hover:bg-surface-container-high px-4 py-2 rounded-lg font-caption text-caption transition-colors">Dismiss</button>
+</div>
+</div>
+<div class="md:col-span-5 glass-panel rounded-xl p-6 shadow-lg relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-spark-orange"></div>
+<div class="flex justify-between items-start mb-4">
+<div>
+<h4 class="font-h4 text-h4 text-on-surface mb-1">Pacing &amp; Pauses</h4>
+<p class="font-caption text-caption text-on-surface-variant">Speech rate and silence utilization.</p>
+</div>
+</div>
+<div class="flex items-center gap-4 mb-4">
+<div class="flex-1">
+<div class="flex justify-between text-caption font-caption text-on-surface-variant mb-1">
+<span>Current Speed</span>
+<span>165 wpm</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-spark-orange h-full rounded-full w-[85%]"></div>
+</div>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">You are speaking slightly faster than optimal (140-150 wpm). Try inserting 2-second pauses after key points.</p>
+</div>
+<!-- Detailed Analytics (Bottom Row) -->
+<div class="md:col-span-12 mt-4 mb-2">
+<h3 class="font-h3 text-h3 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">monitoring</span>
+                    Detailed Analytics
+                </h3>
+</div>
+<div class="md:col-span-4 bg-surface rounded-xl border border-outline-variant p-6 shadow-md flex flex-col">
+<h4 class="font-h4 text-h4 text-on-surface mb-1">Talk-Time Ratio</h4>
+<p class="font-caption text-caption text-on-surface-variant mb-6">You vs. Team vs. Clients</p>
+<div class="flex-1 flex items-center justify-center relative min-h-[200px]">
+<!-- Simulated Donut Chart -->
+<div class="w-40 h-40 rounded-full border-[16px] border-surface-container-high relative">
+<div class="absolute inset-[-16px] rounded-full border-[16px] border-primary border-t-transparent border-r-transparent rotate-45"></div>
+<div class="absolute inset-[-16px] rounded-full border-[16px] border-secondary border-b-transparent border-l-transparent rotate-[225deg]"></div>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-h2 text-h2 text-on-surface">42%</span>
+<span class="font-caption text-caption text-on-surface-variant">Your Time</span>
+</div>
+</div>
+</div>
+<div class="flex justify-between mt-4 border-t border-outline-variant pt-4">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary"></div>
+<span class="font-caption text-caption text-on-surface-variant">You (42%)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary"></div>
+<span class="font-caption text-caption text-on-surface-variant">Client (38%)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-surface-container-high"></div>
+<span class="font-caption text-caption text-on-surface-variant">Team (20%)</span>
+</div>
+</div>
+</div>
+<div class="md:col-span-8 bg-surface rounded-xl border border-outline-variant p-6 shadow-md flex flex-col">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h4 class="font-h4 text-h4 text-on-surface mb-1">Participation Quality Trend</h4>
+<p class="font-caption text-caption text-on-surface-variant">Daily score progression</p>
+</div>
+<select class="bg-surface-container border border-outline-variant rounded-md text-caption font-caption text-on-surface py-1 pl-2 pr-8 focus:ring-primary focus:border-primary">
+<option>This Week</option>
+<option>Last Week</option>
+</select>
+</div>
+<div class="flex-1 flex items-end gap-2 h-[200px] mt-auto">
+<!-- Simulated Bar Chart -->
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full bg-primary-container/20 rounded-t-sm h-[40%] group-hover:bg-primary-container transition-colors relative">
+<span class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-caption text-caption text-on-surface bg-surface-container px-2 py-1 rounded shadow">40</span>
+</div>
+<span class="font-caption text-caption text-on-surface-variant">Mon</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full bg-primary-container/40 rounded-t-sm h-[65%] group-hover:bg-primary-container transition-colors relative">
+<span class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-caption text-caption text-on-surface bg-surface-container px-2 py-1 rounded shadow">65</span>
+</div>
+<span class="font-caption text-caption text-on-surface-variant">Tue</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full bg-primary-container/60 rounded-t-sm h-[50%] group-hover:bg-primary-container transition-colors relative">
+<span class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-caption text-caption text-on-surface bg-surface-container px-2 py-1 rounded shadow">50</span>
+</div>
+<span class="font-caption text-caption text-on-surface-variant">Wed</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full bg-primary-container/80 rounded-t-sm h-[85%] group-hover:bg-primary-container transition-colors relative">
+<span class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-caption text-caption text-on-surface bg-surface-container px-2 py-1 rounded shadow">85</span>
+</div>
+<span class="font-caption text-caption text-on-surface-variant">Thu</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-2 group">
+<div class="w-full bg-primary-container rounded-t-sm h-[95%] shadow-[0_0_10px_rgba(37,99,235,0.5)] relative">
+<span class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity font-caption text-caption text-on-surface bg-surface-container px-2 py-1 rounded shadow">95</span>
+</div>
+<span class="font-caption text-caption text-on-surface font-semibold">Fri</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

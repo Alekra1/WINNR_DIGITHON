@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { saveMeeting } from "@/lib/store";
 import { processMeeting } from "@/lib/pipeline";
+import { validateUploadFile } from "@/lib/constants";
 import type { Meeting, MeetingType } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
+    }
+
+    const validationError = validateUploadFile(file.name, file.size);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

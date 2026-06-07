@@ -2,73 +2,93 @@ import type { MeetingType } from "@/lib/types";
 
 type Status = "processing" | "ready" | "error";
 
-const statusStyles: Record<Status, string> = {
-  processing:
-    "bg-amber-500/15 text-amber-400 border border-amber-500/30",
-  ready: "bg-green-500/15 text-green-400 border border-green-500/30",
-  error: "bg-red-500/15 text-red-400 border border-red-500/30",
-};
-
-const statusLabels: Record<Status, string> = {
-  processing: "Processing",
-  ready: "Ready",
-  error: "Error",
+const statusConfig: Record<Status, { bg: string; text: string; border: string; label: string }> = {
+  processing: {
+    bg:     "rgba(249,115,22,0.12)",
+    text:   "#F97316",
+    border: "rgba(249,115,22,0.3)",
+    label:  "Processing",
+  },
+  ready: {
+    bg:     "rgba(34,197,94,0.12)",
+    text:   "#22C55E",
+    border: "rgba(34,197,94,0.3)",
+    label:  "Ready",
+  },
+  error: {
+    bg:     "rgba(239,68,68,0.12)",
+    text:   "#EF4444",
+    border: "rgba(239,68,68,0.3)",
+    label:  "Error",
+  },
 };
 
 export function StatusBadge({ status }: { status: Status }) {
+  const cfg = statusConfig[status];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}
+      className="badge"
+      style={{
+        background: cfg.bg,
+        color:      cfg.text,
+        border:     `1px solid ${cfg.border}`,
+      }}
     >
       {status === "processing" && (
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full animate-pulse"
+          style={{ background: cfg.text }}
+        />
       )}
-      {statusLabels[status]}
+      {cfg.label}
     </span>
   );
 }
 
-const typeLabels: Record<MeetingType, string> = {
-  standup: "Standup",
-  one_on_one: "1-on-1",
-  planning: "Planning",
-  retro: "Retro",
-  review: "Review",
-  other: "Other",
-};
-
-const typeColors: Record<MeetingType, string> = {
-  standup: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
-  one_on_one: "bg-purple-500/15 text-purple-400 border border-purple-500/20",
-  planning: "bg-indigo-500/15 text-indigo-400 border border-indigo-500/20",
-  retro: "bg-orange-500/15 text-orange-400 border border-orange-500/20",
-  review: "bg-teal-500/15 text-teal-400 border border-teal-500/20",
-  other: "bg-zinc-500/15 text-zinc-400 border border-zinc-500/20",
+const typeConfig: Record<MeetingType, { bg: string; text: string; border: string; label: string }> = {
+  standup:   { bg: "rgba(14,165,233,0.12)",  text: "#38BDF8", border: "rgba(14,165,233,0.25)", label: "Standup" },
+  one_on_one:{ bg: "rgba(168,85,247,0.12)",  text: "#C084FC", border: "rgba(168,85,247,0.25)", label: "1-on-1" },
+  planning:  { bg: "rgba(99,102,241,0.12)",  text: "#818CF8", border: "rgba(99,102,241,0.25)", label: "Planning" },
+  retro:     { bg: "rgba(249,115,22,0.12)",  text: "#FB923C", border: "rgba(249,115,22,0.25)", label: "Retro" },
+  review:    { bg: "rgba(20,184,166,0.12)",  text: "#2DD4BF", border: "rgba(20,184,166,0.25)", label: "Review" },
+  other:     { bg: "rgba(141,144,160,0.12)", text: "#8d90a0", border: "rgba(141,144,160,0.25)", label: "Other" },
 };
 
 export function TypeBadge({ type }: { type: MeetingType }) {
+  const cfg = typeConfig[type];
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${typeColors[type]}`}
+      className="badge"
+      style={{
+        background:   cfg.bg,
+        color:        cfg.text,
+        border:       `1px solid ${cfg.border}`,
+        borderRadius: "0.375rem",
+      }}
     >
-      {typeLabels[type]}
+      {cfg.label}
     </span>
   );
 }
 
 export function SentimentDot({ score }: { score: number }) {
-  // score is -1..1
   const color =
     score >= 0.2
-      ? "bg-green-400"
+      ? "#22C55E"
       : score <= -0.2
-        ? "bg-red-400"
-        : "bg-amber-400";
+        ? "#EF4444"
+        : "#F97316";
   const label =
     score >= 0.2 ? "Positive" : score <= -0.2 ? "Negative" : "Neutral";
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-[var(--text-2)]">
-      <span className={`h-2 w-2 rounded-full ${color}`} />
+    <span
+      className="inline-flex items-center gap-1 text-xs"
+      style={{ color: "var(--text-2)" }}
+    >
+      <span
+        className="h-2 w-2 rounded-full shrink-0"
+        style={{ background: color }}
+      />
       {label}
     </span>
   );

@@ -11,15 +11,16 @@ import {
 } from "recharts";
 import type { Participation } from "@/lib/types";
 
+// NovaSpark accent palette: primary + supporting accent shades
 const COLORS = [
-  "#6366f1",
-  "#22c55e",
-  "#f59e0b",
-  "#06b6d4",
-  "#ec4899",
-  "#8b5cf6",
-  "#14b8a6",
-  "#f97316",
+  "#2563EB",
+  "#b4c5ff",
+  "#22C55E",
+  "#F97316",
+  "#38BDF8",
+  "#C084FC",
+  "#2DD4BF",
+  "#FB923C",
 ];
 
 interface Props {
@@ -37,7 +38,7 @@ export default function TalkTimeChart({ participation }: Props) {
 
   const data = participation.map((p) => ({
     name: p.employeeName,
-    pct: Math.round(p.talkPct * 10) / 10,
+    pct:  Math.round(p.talkPct * 10) / 10,
   }));
 
   return (
@@ -45,7 +46,7 @@ export default function TalkTimeChart({ participation }: Props) {
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 4, right: 40, left: 0, bottom: 4 }}
+        margin={{ top: 4, right: 44, left: 0, bottom: 4 }}
         barCategoryGap="30%"
       >
         <XAxis
@@ -59,20 +60,22 @@ export default function TalkTimeChart({ participation }: Props) {
         <YAxis
           type="category"
           dataKey="name"
-          width={110}
+          width={120}
           tick={{ fill: "var(--text-2)", fontSize: 12 }}
           axisLine={false}
           tickLine={false}
         />
         <Tooltip
-          cursor={{ fill: "rgba(255,255,255,0.04)" }}
+          cursor={{ fill: "rgba(255,255,255,0.03)" }}
           contentStyle={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "0.5rem",
-            color: "var(--text-1)",
-            fontSize: "12px",
+            background:   "var(--bg-surface-high)",
+            border:       "1px solid var(--border)",
+            borderRadius: "0.625rem",
+            color:        "var(--text-1)",
+            fontSize:     "12px",
+            padding:      "8px 12px",
           }}
+          labelStyle={{ color: "var(--text-2)", marginBottom: 2 }}
           formatter={(val) => [`${val}%`, "Talk time"] as [string, string]}
         />
         <Bar dataKey="pct" radius={[0, 4, 4, 0]}>

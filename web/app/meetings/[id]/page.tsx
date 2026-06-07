@@ -14,9 +14,9 @@ const TalkTimeChart = dynamic(() => import("@/components/TalkTimeChart"), {
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
     weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month:   "short",
+    day:     "numeric",
+    year:    "numeric",
   });
 }
 
@@ -31,16 +31,28 @@ function formatDuration(sec: number) {
 
 function SectionCard({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="card p-6 space-y-4">
-      <h2 className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
-        {title}
-      </h2>
+    <section className="card p-6 space-y-5">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <span
+            className="material-symbols-outlined"
+            style={{ color: "var(--accent)", fontSize: 18 }}
+          >
+            {icon}
+          </span>
+        )}
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-1)" }}>
+          {title}
+        </h2>
+      </div>
       {children}
     </section>
   );
@@ -76,9 +88,7 @@ export default function MeetingDetail() {
       const data: Meeting = await res.json();
       setMeeting(data);
       setSpeakerMap(data.speakerMap ?? {});
-      if (data.status !== "processing") {
-        stopPolling();
-      }
+      if (data.status !== "processing") stopPolling();
       setFetchError(null);
     } catch (err) {
       setFetchError((err as Error).message);
@@ -92,7 +102,6 @@ export default function MeetingDetail() {
     return () => stopPolling();
   }, [fetchMeeting, stopPolling]);
 
-  // Start polling once we know status === processing
   useEffect(() => {
     if (meeting?.status === "processing" && !pollingRef.current) {
       pollingRef.current = setInterval(fetchMeeting, 4000);
@@ -101,9 +110,9 @@ export default function MeetingDetail() {
 
   async function handlePatch(body: { speakerMap?: SpeakerMap; tasks?: Task[] }) {
     const res = await fetch(`/api/meetings/${id}`, {
-      method: "PATCH",
+      method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body:    JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`PATCH failed: HTTP ${res.status}`);
     const updated: Meeting = await res.json();
@@ -135,7 +144,7 @@ export default function MeetingDetail() {
     }
   }
 
-  /* ── Render states ── */
+  /* ── Loading state ── */
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -144,9 +153,16 @@ export default function MeetingDetail() {
     );
   }
 
+  /* ── Fetch error state ── */
   if (fetchError || !meeting) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-16 text-center">
+      <div className="max-w-3xl mx-auto px-6 py-20 text-center space-y-4">
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: 48, color: "var(--text-3)", display: "block" }}
+        >
+          error_outline
+        </span>
         <p className="text-sm" style={{ color: "var(--text-2)" }}>
           {fetchError ?? "Meeting not found."}
         </p>
@@ -162,12 +178,15 @@ export default function MeetingDetail() {
   ).sort();
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-6">
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-5">
       {/* ── (a) Header ── */}
       <div className="card p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <h1 className="text-xl font-bold" style={{ color: "var(--text-1)" }}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2 flex-1 min-w-0">
+            <h1
+              className="text-xl font-bold leading-snug"
+              style={{ color: "var(--text-1)" }}
+            >
               {meeting.title}
             </h1>
             <div className="flex flex-wrap items-center gap-2">
@@ -176,7 +195,7 @@ export default function MeetingDetail() {
               {meeting.status === "processing" && <Spinner small />}
             </div>
           </div>
-          <div className="text-right space-y-1">
+          <div className="text-right space-y-1 shrink-0">
             <p className="text-sm" style={{ color: "var(--text-2)" }}>
               {formatDate(meeting.createdAt)}
             </p>
@@ -188,49 +207,71 @@ export default function MeetingDetail() {
           </div>
         </div>
 
-        {meeting.status === "error" && meeting.error && (
+        {/* ── Error banner (processing failed) ── */}
+        {meeting.status === "error" && (
           <div
-            className="mt-4 rounded-lg px-4 py-3 text-sm"
-            style={{ background: "rgba(239,68,68,0.1)", color: "var(--red)" }}
+            className="mt-5 flex items-start gap-3 rounded-xl px-4 py-4"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border:     "1px solid rgba(239,68,68,0.3)",
+            }}
           >
-            {meeting.error}
+            <span
+              className="material-symbols-outlined shrink-0 mt-0.5"
+              style={{ color: "var(--red)", fontSize: 20 }}
+            >
+              error
+            </span>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold" style={{ color: "var(--red)" }}>
+                Processing failed
+              </p>
+              {meeting.error && (
+                <p className="text-xs leading-relaxed" style={{ color: "#fca5a5" }}>
+                  {meeting.error}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       {/* ── Processing placeholder ── */}
       {meeting.status === "processing" && (
-        <div className="card p-10 text-center space-y-3">
+        <div className="card p-12 text-center space-y-4">
           <Spinner />
           <p className="text-sm" style={{ color: "var(--text-2)" }}>
             Analysis in progress — this usually takes 1–2 minutes.
           </p>
+          <p className="text-xs" style={{ color: "var(--text-3)" }}>
+            This page refreshes automatically.
+          </p>
         </div>
       )}
 
-      {meeting.status !== "processing" && (
+      {/* ── Ready sections ── */}
+      {meeting.status !== "processing" && meeting.status !== "error" && (
         <>
-          {/* ── (b) Talk-time chart ── */}
-          <SectionCard title="Talk time">
+          {/* (b) Talk-time chart */}
+          <SectionCard title="Talk time" icon="record_voice_over">
             <TalkTimeChart participation={meeting.participation} />
           </SectionCard>
 
-          {/* ── (c) Speaker naming ── */}
+          {/* (c) Speaker naming */}
           {diarizationLabels.length > 0 && (
-            <SectionCard title="Name speakers">
+            <SectionCard title="Name speakers" icon="badge">
               <p className="text-xs" style={{ color: "var(--text-3)" }}>
-                Map diarization labels to real names. Changes are reflected in
-                charts and snapshots.
+                Map diarization labels to real names. Changes are reflected in charts and snapshots.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {diarizationLabels.map((label) => (
                   <div key={label} className="flex items-center gap-3">
                     <span
-                      className="shrink-0 w-16 text-xs font-mono rounded px-2 py-1 text-center"
+                      className="shrink-0 w-16 text-xs font-mono rounded-lg px-2 py-1 text-center"
                       style={{
-                        background: "var(--bg-input)",
-                        color: "var(--text-2)",
-                        border: "1px solid var(--border)",
+                        background: "var(--bg-surface)",
+                        color:      "var(--accent)",
+                        border:     "1px solid var(--border)",
                       }}
                     >
                       {label}
@@ -240,10 +281,7 @@ export default function MeetingDetail() {
                       value={speakerMap[label] ?? ""}
                       placeholder={`Speaker ${label}`}
                       onChange={(e) =>
-                        setSpeakerMap((prev) => ({
-                          ...prev,
-                          [label]: e.target.value,
-                        }))
+                        setSpeakerMap((prev) => ({ ...prev, [label]: e.target.value }))
                       }
                       className="input flex-1"
                     />
@@ -256,10 +294,15 @@ export default function MeetingDetail() {
                   disabled={savingMap}
                   className="btn-primary text-sm"
                 >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span>
                   {savingMap ? "Saving…" : "Save names"}
                 </button>
                 {mapSaved && (
-                  <span className="text-xs" style={{ color: "var(--green)" }}>
+                  <span
+                    className="flex items-center gap-1 text-xs"
+                    style={{ color: "var(--green)" }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
                     Saved!
                   </span>
                 )}
@@ -267,9 +310,9 @@ export default function MeetingDetail() {
             </SectionCard>
           )}
 
-          {/* ── (d) Summary ── */}
+          {/* (d) Summary */}
           {meeting.summary && (
-            <SectionCard title="Summary">
+            <SectionCard title="Summary" icon="summarize">
               <div
                 className="text-sm leading-relaxed whitespace-pre-wrap"
                 style={{ color: "var(--text-2)" }}
@@ -279,35 +322,36 @@ export default function MeetingDetail() {
             </SectionCard>
           )}
 
-          {/* ── (e) Tasks ── */}
-          <SectionCard title="Action items">
-            <TaskList
-              tasks={meeting.tasks}
-              onSave={saveTasks}
-              saving={savingTasks}
-            />
+          {/* (e) Tasks */}
+          <SectionCard title="Action items" icon="task_alt">
+            <TaskList tasks={meeting.tasks} onSave={saveTasks} saving={savingTasks} />
           </SectionCard>
 
-          {/* ── (f) Per-employee snapshots ── */}
+          {/* (f) Per-employee snapshots */}
           {meeting.snapshots && meeting.snapshots.length > 0 && (
-            <SectionCard title="Employee snapshots">
+            <SectionCard title="Employee snapshots" icon="group">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {meeting.snapshots.map((snap) => (
                   <div
                     key={snap.employeeName}
-                    className="rounded-lg p-4 space-y-3"
+                    className="rounded-xl p-4 space-y-3"
                     style={{
-                      background: "var(--bg-input)",
-                      border: "1px solid var(--border)",
+                      background: "var(--bg-surface)",
+                      border:     "1px solid var(--border)",
                     }}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--text-1)" }}
-                      >
-                        {snap.employeeName}
-                      </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 18, color: "var(--accent)" }}
+                        >
+                          account_circle
+                        </span>
+                        <span className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
+                          {snap.employeeName}
+                        </span>
+                      </div>
                       <SentimentDot score={snap.avgSentimentScore} />
                     </div>
 
@@ -327,7 +371,7 @@ export default function MeetingDetail() {
                     </div>
 
                     {snap.tasks.length > 0 && (
-                      <ul className="space-y-1">
+                      <ul className="space-y-1.5">
                         {snap.tasks.map((t) => (
                           <li
                             key={t.id}
@@ -337,19 +381,14 @@ export default function MeetingDetail() {
                             <span
                               className="mt-0.5 h-1.5 w-1.5 rounded-full shrink-0"
                               style={{
-                                background: t.done
-                                  ? "var(--green)"
-                                  : "var(--accent)",
-                                marginTop: "5px",
+                                background: t.done ? "var(--green)" : "var(--accent-container)",
+                                marginTop:  "5px",
                               }}
                             />
                             <span
                               style={
                                 t.done
-                                  ? {
-                                      textDecoration: "line-through",
-                                      color: "var(--text-3)",
-                                    }
+                                  ? { textDecoration: "line-through", color: "var(--text-3)" }
                                   : {}
                               }
                             >
@@ -362,9 +401,9 @@ export default function MeetingDetail() {
 
                     {snap.recommendation && (
                       <p
-                        className="text-xs italic border-t pt-2"
+                        className="text-xs italic border-t pt-3 leading-relaxed"
                         style={{
-                          color: "var(--text-3)",
+                          color:       "var(--text-3)",
                           borderColor: "var(--border)",
                         }}
                       >
@@ -386,8 +425,11 @@ function Spinner({ small }: { small?: boolean }) {
   const size = small ? "h-4 w-4 border-2" : "h-8 w-8 border-2";
   return (
     <div
-      className={`${size} rounded-full border-t-transparent animate-spin inline-block`}
-      style={{ borderColor: "var(--accent)", borderTopColor: "transparent" }}
+      className={`${size} rounded-full animate-spin inline-block`}
+      style={{
+        borderColor:    "var(--accent-container)",
+        borderTopColor: "transparent",
+      }}
     />
   );
 }

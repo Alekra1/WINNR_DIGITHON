@@ -2,92 +2,125 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import WinnrLogo from "./WinnrLogo";
 
-const navItems = [
-  {
-    href: "/",
-    label: "Meetings",
-    icon: (
-      <svg
-        className="h-4 w-4"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="3" y="4" width="18" height="18" rx="2" />
-        <path d="M16 2v4M8 2v4M3 10h18" />
-      </svg>
-    ),
-  },
-  {
-    href: "/chat",
-    label: "AI Chat",
-    icon: (
-      <svg
-        className="h-4 w-4"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-  },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  active?: boolean;
+  disabled?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/",     label: "Dashboard",    icon: "dashboard" },
+  { href: "/chat", label: "Muninn Vault", icon: "psychology" },
+  { href: "#",     label: "Insights",     icon: "analytics",     disabled: true },
+  { href: "#",     label: "Task Tracker", icon: "task_alt",      disabled: true },
+  { href: "#",     label: "Recordings",   icon: "video_library", disabled: true },
+];
+
+const FOOTER_ITEMS: NavItem[] = [
+  { href: "#", label: "Settings", icon: "settings", disabled: true },
+  { href: "#", label: "Support",  icon: "help",     disabled: true },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
+  function isActive(item: NavItem) {
+    if (item.disabled) return false;
+    if (item.href === "/") return pathname === "/" || pathname.startsWith("/meetings");
+    return pathname.startsWith(item.href);
+  }
+
   return (
     <aside
-      className="flex flex-col w-56 min-h-screen shrink-0"
+      className="flex flex-col shrink-0"
       style={{
-        background: "var(--bg-surface)",
+        width: "240px",
+        minHeight: "100vh",
+        background: "var(--bg-card)",
         borderRight: "1px solid var(--border)",
       }}
     >
-      {/* Brand */}
-      <div className="px-5 py-5 border-b" style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-center gap-2">
-          <div
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-            style={{ background: "var(--accent)" }}
-          >
-            W
+      {/* ── Brand ── */}
+      <div
+        className="flex items-center gap-3 px-6 py-6"
+        style={{ borderBottom: "1px solid var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-center rounded-lg shrink-0"
+          style={{
+            width: 40,
+            height: 40,
+            background: "var(--accent-container)",
+          }}
+        >
+          <WinnrLogo size={22} />
+        </div>
+        <div>
+          <div className="text-sm font-bold leading-tight" style={{ color: "var(--text-1)" }}>
+            WINNR
           </div>
-          <div>
-            <div className="text-sm font-semibold" style={{ color: "var(--text-1)" }}>
-              WINNR
-            </div>
-            <div className="text-[10px] leading-tight" style={{ color: "var(--text-3)" }}>
-              Meeting Intelligence
-            </div>
+          <div className="text-[11px] leading-tight" style={{ color: "var(--text-3)" }}>
+            Meeting Intelligence
           </div>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map((item) => {
-          const active =
-            item.href === "/"
-              ? pathname === "/" || pathname.startsWith("/meetings")
-              : pathname.startsWith(item.href);
+      {/* ── New Meeting CTA ── */}
+      <div className="px-4 pt-5 pb-2">
+        <Link
+          href="/"
+          className="btn-primary w-full justify-center"
+          style={{ borderRadius: "0.5rem" }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+          New Meeting
+        </Link>
+      </div>
+
+      {/* ── Primary Nav ── */}
+      <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(item);
+          if (item.disabled) {
+            return (
+              <div
+                key={item.label}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-default select-none"
+                style={{ color: "var(--text-3)" }}
+              >
+                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>
+                  {item.icon}
+                </span>
+                <span className="text-sm flex-1">{item.label}</span>
+                <span
+                  className="badge"
+                  style={{
+                    background: "rgba(141,144,160,0.15)",
+                    color: "var(--text-3)",
+                    fontSize: "10px",
+                    padding: "1px 6px",
+                  }}
+                >
+                  Soon
+                </span>
+              </div>
+            );
+          }
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200"
               style={
                 active
                   ? {
-                      background: "var(--accent-dim)",
+                      borderLeft: "3px solid var(--accent)",
+                      paddingLeft: "calc(0.75rem - 3px)",
+                      background: "var(--bg-surface-high)",
                       color: "var(--accent)",
                     }
                   : {
@@ -95,19 +128,46 @@ export default function Sidebar() {
                     }
               }
             >
-              {item.icon}
+              <span
+                className="material-symbols-outlined shrink-0"
+                style={{ fontSize: 20 }}
+              >
+                {item.icon}
+              </span>
               {item.label}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer */}
+      {/* ── Footer Nav ── */}
       <div
-        className="px-5 py-4 text-[10px]"
-        style={{ color: "var(--text-3)", borderTop: "1px solid var(--border)" }}
+        className="px-2 pt-3 pb-4 flex flex-col gap-0.5"
+        style={{ borderTop: "1px solid var(--border)" }}
       >
-        Digithon MVP
+        {FOOTER_ITEMS.map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-default select-none"
+            style={{ color: "var(--text-3)" }}
+          >
+            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>
+              {item.icon}
+            </span>
+            <span className="text-sm flex-1">{item.label}</span>
+            <span
+              className="badge"
+              style={{
+                background: "rgba(141,144,160,0.15)",
+                color: "var(--text-3)",
+                fontSize: "10px",
+                padding: "1px 6px",
+              }}
+            >
+              Soon
+            </span>
+          </div>
+        ))}
       </div>
     </aside>
   );
