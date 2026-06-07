@@ -24,6 +24,9 @@ export interface Utterance {
 /** Maps a diarization label ("A") to a human name ("Yani"). User-edited in UI. */
 export type SpeakerMap = Record<string, string>;
 
+/** Names expected to appear in a meeting, provided before transcription. */
+export type ExpectedParticipant = string;
+
 /** Per-speaker participation metrics, computed from utterances. */
 export interface Participation {
   speaker: string; // diarization label
@@ -61,6 +64,7 @@ export interface Meeting {
   durationSec: number;
   project?: string;
   department?: string;
+  expectedParticipants?: ExpectedParticipant[];
   transcriptText: string;
   utterances: Utterance[];
   speakerMap: SpeakerMap;

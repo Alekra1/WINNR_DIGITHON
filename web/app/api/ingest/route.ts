@@ -17,6 +17,18 @@ const TYPES: MeetingType[] = [
   "other",
 ];
 
+function parseParticipants(raw: FormDataEntryValue | null): string[] {
+  if (typeof raw !== "string") return [];
+  return Array.from(
+    new Set(
+      raw
+        .split(/[\n,;]+/)
+        .map((name) => name.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const form = await req.formData();
@@ -29,6 +41,7 @@ export async function POST(req: Request) {
     const project = (form.get("project") as string)?.trim() || undefined;
     const department =
       (form.get("department") as string)?.trim() || undefined;
+    const expectedParticipants = parseParticipants(form.get("participants"));
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
@@ -50,6 +63,7 @@ export async function POST(req: Request) {
       durationSec: 0,
       project,
       department,
+      expectedParticipants,
       transcriptText: "",
       utterances: [],
       speakerMap: {},

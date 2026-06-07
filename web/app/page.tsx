@@ -54,6 +54,7 @@ export default function MeetingsDashboard() {
   // Upload form state
   const [title, setTitle] = useState("");
   const [type, setType] = useState<MeetingType>("standup");
+  const [participants, setParticipants] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -107,6 +108,7 @@ export default function MeetingsDashboard() {
     form.append("file", file);
     form.append("title", title.trim());
     form.append("type", type);
+    form.append("participants", participants.trim());
 
     try {
       const res = await fetch("/api/ingest", { method: "POST", body: form });
@@ -185,6 +187,21 @@ export default function MeetingsDashboard() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium" style={{ color: "var(--text-2)" }}>
+              Expected participants
+            </label>
+            <textarea
+              value={participants}
+              onChange={(e) => setParticipants(e.target.value)}
+              placeholder="Alice Johnson, Bob Smith, Yani Petrova"
+              className="input min-h-20 resize-y"
+            />
+            <p className="text-xs" style={{ color: "var(--text-3)" }}>
+              Optional. Add names separated by commas or new lines to improve automatic speaker and task assignment.
+            </p>
           </div>
 
           {/* File drop zone */}

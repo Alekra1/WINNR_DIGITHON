@@ -1,20 +1,28 @@
 import { AssemblyAI } from "assemblyai";
-import type { TranscriptUtterance, SentimentAnalysisResult } from "assemblyai";
-import type { Utterance, Sentiment } from "@/lib/types";
+import type {
+  SentimentAnalysisResult,
+  TranscribeParams,
+  TranscriptUtterance,
+} from "assemblyai";
+import type { SpeakerMap, Utterance, Sentiment } from "@/lib/types";
 
-/** Normalize speaker label to a single uppercase letter.
- *  AssemblyAI uses "A","B",... but defensively handles "1","2",... too.
+/** Normalize generic diarization labels while preserving identified speaker names.
+ *  AssemblyAI diarization uses "A","B",...; Speaker Identification can return
+ *  names/roles such as "Alice Johnson", which must not be collapsed to "A".
  */
 function normalizeLabel(raw: string): string {
+  const trimmed = raw.trim();
   // If it's already a letter, return uppercase.
-  if (/^[A-Za-z]$/.test(raw)) return raw.toUpperCase();
+  if (/^[A-Za-z]$/.test(trimmed)) return trimmed.toUpperCase();
   // If it looks numeric (1-based), convert to corresponding letter.
-  const n = parseInt(raw, 10);
-  if (!isNaN(n) && n >= 1 && n <= 26) {
-    return String.fromCharCode(64 + n); // 1→A, 2→B, ...
+  if (/^\d+$/.test(trimmed)) {
+    const n = parseInt(trimmed, 10);
+    if (n >= 1 && n <= 26) {
+      return String.fromCharCode(64 + n); // 1→A, 2→B, ...
+    }
   }
-  // Fallback: use first character uppercased.
-  return raw.charAt(0).toUpperCase();
+  // Speaker Identification returns meaningful names/roles; keep them intact.
+  return trimmed;
 }
 
 /** Find the dominant sentiment from sentiment results that overlap an utterance's time range. */
@@ -27,7 +35,9 @@ function pickDominantSentiment(
   const overlapping = sentimentResults.filter((s) => {
     const timeOverlaps = s.start < utteranceEnd && s.end > utteranceStart;
     const speakerMatches =
-      s.speaker === null || normalizeLabel(s.speaker) === utteranceSpeaker;
+      s.speaker === null ||
+      s.speaker === utteranceSpeaker ||
+      normalizeLabel(s.speaker) === utteranceSpeaker;
     return timeOverlaps && speakerMatches;
   });
 
@@ -60,9 +70,11 @@ function pickDominantSentiment(
 export async function transcribeAudio(input: {
   buffer?: Buffer;
   filePath?: string;
+  expectedParticipants?: string[];
 }): Promise<{
   transcriptText: string;
   utterances: Utterance[];
+  speakerMap: SpeakerMap;
   durationSec: number;
 }> {
   const apiKey = process.env.ASSEMBLYAI_API_KEY;
@@ -76,12 +88,34 @@ export async function transcribeAudio(input: {
   }
 
   const client = new AssemblyAI({ apiKey });
+  const expectedParticipants = Array.from(
+    new Set(
+      (input.expectedParticipants ?? [])
+        .map((name) => name.trim())
+        .filter(Boolean)
+    )
+  );
 
-  const transcript = await client.transcripts.transcribe({
+  const transcriptParams: TranscribeParams = {
     audio,
+    speech_models: ["universal-3-pro", "universal-2"],
+    language_detection: true,
     speaker_labels: true,
     sentiment_analysis: true,
-  });
+  };
+
+  if (expectedParticipants.length > 0) {
+    transcriptParams.speech_understanding = {
+      request: {
+        speaker_identification: {
+          speaker_type: "name",
+          known_values: expectedParticipants,
+        },
+      },
+    };
+  }
+
+  const transcript = await client.transcripts.transcribe(transcriptParams);
 
   if (transcript.status === "error") {
     throw new Error(
@@ -92,6 +126,18 @@ export async function transcribeAudio(input: {
   const rawUtterances: TranscriptUtterance[] = transcript.utterances ?? [];
   const sentimentResults: SentimentAnalysisResult[] =
     transcript.sentiment_analysis_results ?? [];
+  const speakerMap =
+    (
+      transcript as typeof transcript & {
+        speech_understanding?: {
+          response?: {
+            speaker_identification?: {
+              mapping?: SpeakerMap;
+            };
+          };
+        };
+      }
+    ).speech_understanding?.response?.speaker_identification?.mapping ?? {};
 
   const utterances: Utterance[] = rawUtterances.map((u) => {
     const speaker = normalizeLabel(u.speaker);
@@ -122,6 +168,7 @@ export async function transcribeAudio(input: {
   return {
     transcriptText: transcript.text ?? "",
     utterances,
+    speakerMap,
     durationSec,
   };
 }

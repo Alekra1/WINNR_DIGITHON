@@ -31,12 +31,17 @@ import type { Utterance, SpeakerMap, Participation } from "@/lib/types";
 
 const SENTIMENT_SCORE = { POSITIVE: 1, NEUTRAL: 0, NEGATIVE: -1 } as const;
 
+function isGenericSpeakerLabel(label: string): boolean {
+  return /^[A-Z]$/.test(label) || /^\d+$/.test(label);
+}
+
 /**
  * Resolve a diarization label to a human-readable name.
- * Falls back to "Speaker <label>" if not found in the map.
+ * Falls back to "Speaker <label>" for generic diarization labels. If AssemblyAI
+ * Speaker Identification returned a name/role directly, keep it as the name.
  */
 export function resolveName(label: string, speakerMap: SpeakerMap): string {
-  return speakerMap[label] ?? `Speaker ${label}`;
+  return speakerMap[label] ?? (isGenericSpeakerLabel(label) ? `Speaker ${label}` : label);
 }
 
 /**

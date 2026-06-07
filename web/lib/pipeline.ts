@@ -4,6 +4,7 @@
 
 import { transcribeAudio } from "@/lib/assembly";
 import { computeParticipation } from "@/lib/metrics";
+import { resolveName } from "@/lib/metrics";
 import { summarizeMeeting, generateTasks } from "@/lib/llm";
 import { rememberMemory } from "@/lib/muninn";
 import { getMeeting, updateMeeting } from "@/lib/store";
@@ -13,6 +14,26 @@ import type {
   Task,
   Participation,
 } from "@/lib/types";
+
+function formatSpeakerTranscript(
+  utterances: { speaker: string; text: string }[],
+  speakerMap: Record<string, string>
+): string {
+  return utterances
+    .map((u) => `${resolveName(u.speaker, speakerMap)}: ${u.text}`)
+    .join("\n");
+}
+
+function normalizeTaskAssignees(tasks: Task[], participantNames: string[]): Task[] {
+  const byLowerName = new Map(
+    participantNames.map((name) => [name.toLowerCase(), name])
+  );
+
+  return tasks.map((task) => {
+    const assignee = byLowerName.get(task.assignee.toLowerCase());
+    return assignee ? { ...task, assignee } : task;
+  });
+}
 
 /** Group tasks under each participant to form per-employee snapshots. */
 export function buildSnapshots(
@@ -102,25 +123,40 @@ export async function writeMemories(m: Meeting): Promise<MemoryWriteReport> {
 /** Full pipeline for a freshly uploaded meeting. Run fire-and-forget. */
 export async function processMeeting(id: string, buffer: Buffer): Promise<void> {
   try {
-    const { transcriptText, utterances, durationSec } = await transcribeAudio({
+    const initialMeeting = await getMeeting(id);
+    if (!initialMeeting) return;
+
+    const {
+      transcriptText,
+      utterances,
+      speakerMap: identifiedSpeakerMap,
+      durationSec,
+    } = await transcribeAudio({
       buffer,
+      expectedParticipants: initialMeeting.expectedParticipants,
     });
     const meeting = await getMeeting(id);
     if (!meeting) return;
 
-    const speakerMap = meeting.speakerMap ?? {};
+    const speakerMap = {
+      ...identifiedSpeakerMap,
+      ...(meeting.speakerMap ?? {}),
+    };
     const participation = computeParticipation(utterances, speakerMap);
     const speakerNames = participation.map((p) => p.employeeName);
+    const speakerTranscript = formatSpeakerTranscript(utterances, speakerMap);
 
-    const [summary, tasks] = await Promise.all([
-      summarizeMeeting(transcriptText, meeting.type),
-      generateTasks(transcriptText, speakerNames),
+    const [summary, extractedTasks] = await Promise.all([
+      summarizeMeeting(speakerTranscript || transcriptText, meeting.type),
+      generateTasks(speakerTranscript || transcriptText, speakerNames),
     ]);
+    const tasks = normalizeTaskAssignees(extractedTasks, speakerNames);
     const snapshots = buildSnapshots(participation, tasks);
 
     const updated = await updateMeeting(id, {
       transcriptText,
       utterances,
+      speakerMap,
       durationSec,
       participation,
       summary,
