@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { MeetingType, Task, Scope, RecalledMemory } from "@/lib/types";
+import type { MeetingType, Task, Scope, RecalledMemory, ChatMessage } from "@/lib/types";
 
 const MODEL = process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash";
 
@@ -175,6 +175,9 @@ function renderMemories(memories: RecalledMemory[]): string {
     .join("\n");
 }
 
+/** Keep the most recent turns so multi-turn context stays bounded. */
+const MAX_HISTORY_TURNS = 12;
+
 export async function chat(
   question: string,
   opts: {
@@ -182,6 +185,7 @@ export async function chat(
     scope: Scope;
     transcript?: string;
     transcriptTruncated?: boolean;
+    history?: ChatMessage[];
   }
 ): Promise<string> {
   const memoryBlock = renderMemories(opts.memories);
@@ -193,10 +197,15 @@ export async function chat(
       }:\n${opts.transcript}`
     : "";
 
-  const systemPrompt = `You are the company's meeting-intelligence assistant. Answer using ONLY the provided context (the transcript and/or memory below). If the answer isn't in context, say you don't have that information. Scope: ${opts.scope}.
+  const systemPrompt = `You are the company's meeting-intelligence assistant. This is an ongoing conversation — use the earlier messages to resolve follow-up questions (e.g. "more detail", "what about her?"). Answer using ONLY the provided context (the transcript and/or memory below) plus what was already said in this conversation. If the answer isn't in context, say you don't have that information. Scope: ${opts.scope}.
 
 Memory context:
 ${memoryBlock}${transcriptBlock}`;
+
+  const history = (opts.history ?? [])
+    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content?.trim())
+    .slice(-MAX_HISTORY_TURNS)
+    .map((m) => ({ role: m.role, content: m.content }));
 
   try {
     const response = await getClient().chat.completions.create({
@@ -204,6 +213,7 @@ ${memoryBlock}${transcriptBlock}`;
       temperature: 0.4,
       messages: [
         { role: "system", content: systemPrompt },
+        ...history,
         { role: "user", content: question },
       ],
     });

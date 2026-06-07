@@ -181,6 +181,11 @@ export default function ChatPage() {
       return;
     }
 
+    // Prior turns become conversation history so follow-ups have context.
+    const history = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+
     setInput("");
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: question }]);
     setLoading(true);
@@ -189,7 +194,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ question, scope, ...(scope === "meeting" ? { meetingId } : {}) }),
+        body:    JSON.stringify({ question, scope, history, ...(scope === "meeting" ? { meetingId } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -212,7 +217,7 @@ export default function ChatPage() {
         inputRef.current?.focus();
       }
     }
-  }, [input, loading, scope, meetingId]);
+  }, [input, loading, scope, meetingId, messages]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -38,6 +38,11 @@ export default function AskAboutMeeting({
     const question = input.trim();
     if (!question || loading) return;
 
+    // Prior turns become conversation history so follow-ups have context.
+    const history = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+
     setInput("");
     setMessages((p) => [...p, { id: crypto.randomUUID(), role: "user", content: question }]);
     setLoading(true);
@@ -46,7 +51,7 @@ export default function AskAboutMeeting({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, scope: "meeting", meetingId }),
+        body: JSON.stringify({ question, scope: "meeting", meetingId, history }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -69,7 +74,7 @@ export default function AskAboutMeeting({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [input, loading, meetingId]);
+  }, [input, loading, meetingId, messages]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
